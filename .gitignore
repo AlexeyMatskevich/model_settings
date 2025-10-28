@@ -1,0 +1,13 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+/.devbox/
+# rspec failure tracking
+.rspec_status
+ModelSettings DSL – техническое задание и план реализации.pdf
+PLAN.md
