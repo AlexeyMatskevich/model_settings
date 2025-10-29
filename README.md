@@ -511,7 +511,7 @@ end
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/model_settings.
+Bug reports and pull requests are welcome on GitHub at https://github.com/AlexeyMatskevich/model_settings.
 
 ## License
 

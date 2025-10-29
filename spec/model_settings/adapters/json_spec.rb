@@ -25,14 +25,14 @@ RSpec.describe ModelSettings::Adapters::Json do
   end
 
   describe "#setup!" do
+    let(:instance) { JsonTestModel.new }
+
     context "when setting is defined" do
       before do
         JsonTestModel.setting :notifications_enabled,
           type: :json,
           storage: {column: :settings}
       end
-
-      let(:instance) { JsonTestModel.new }
 
       it "creates enable! helper method" do
         expect(instance).to respond_to(:notifications_enabled_enable!)
@@ -53,11 +53,6 @@ RSpec.describe ModelSettings::Adapters::Json do
       it "creates disabled? helper method" do
         expect(instance).to respond_to(:notifications_enabled_disabled?)
       end
-
-      it "sets up store_accessor for the setting" do
-        expect(instance).to respond_to(:notifications_enabled)
-        expect(instance).to respond_to(:notifications_enabled=)
-      end
     end
 
     context "when setting has nested settings" do
@@ -68,45 +63,69 @@ RSpec.describe ModelSettings::Adapters::Json do
         end
       end
 
-      let(:instance) { JsonTestModel.new }
-
-      it "creates accessors for parent setting" do
+      it "creates getter for parent setting" do
         expect(instance).to respond_to(:features)
+      end
+
+      it "creates setter for parent setting" do
         expect(instance).to respond_to(:features=)
       end
 
-      it "creates accessors for nested settings" do
+      it "creates getter for billing_enabled" do
         expect(instance).to respond_to(:billing_enabled)
+      end
+
+      it "creates setter for billing_enabled" do
         expect(instance).to respond_to(:billing_enabled=)
+      end
+
+      it "creates getter for speech_recognition" do
         expect(instance).to respond_to(:speech_recognition)
+      end
+
+      it "creates setter for speech_recognition" do
         expect(instance).to respond_to(:speech_recognition=)
       end
 
-      it "creates helper methods for nested settings" do
+      it "creates enable! for billing_enabled" do
         expect(instance).to respond_to(:billing_enabled_enable!)
+      end
+
+      it "creates disable! for billing_enabled" do
         expect(instance).to respond_to(:billing_enabled_disable!)
+      end
+
+      it "creates toggle! for billing_enabled" do
         expect(instance).to respond_to(:billing_enabled_toggle!)
+      end
+
+      it "creates enable! for speech_recognition" do
         expect(instance).to respond_to(:speech_recognition_enable!)
       end
     end
 
     context "when storage configuration is missing" do
+      let(:storage_config) { nil }
+
       it "raises ArgumentError" do
         expect {
-          JsonTestModel.setting :invalid_setting, type: :json
+          JsonTestModel.setting :invalid_setting, type: :json, storage: storage_config
         }.to raise_error(ArgumentError, /JSON adapter requires storage/)
       end
     end
 
     context "when storage column is NOT specified" do
+      let(:storage_config) { {} }
+
       it "raises ArgumentError" do
         expect {
-          JsonTestModel.setting :invalid_setting, type: :json, storage: {}
+          JsonTestModel.setting :invalid_setting, type: :json, storage: storage_config
         }.to raise_error(ArgumentError, /JSON adapter requires storage/)
       end
     end
   end
 
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "helper methods" do
     before do
       JsonTestModel.setting :notifications_enabled,
@@ -232,6 +251,7 @@ RSpec.describe ModelSettings::Adapters::Json do
       end
     end
   end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
   describe "#read" do
     before do
@@ -281,25 +301,29 @@ RSpec.describe ModelSettings::Adapters::Json do
     let(:adapter) { described_class.new(JsonTestModel, JsonTestModel.find_setting(:api_enabled)) }
 
     context "when writing true" do
+      let(:new_value) { true }
+
       it "sets value to true" do
-        adapter.write(instance, true)
+        adapter.write(instance, new_value)
         expect(instance.api_enabled).to be true
       end
 
       it "marks as changed" do
-        adapter.write(instance, true)
+        adapter.write(instance, new_value)
         expect(instance.api_enabled_changed?).to be true
       end
     end
 
     context "when writing false" do
+      let(:new_value) { false }
+
       it "sets value to false" do
-        adapter.write(instance, false)
+        adapter.write(instance, new_value)
         expect(instance.api_enabled).to be false
       end
 
       it "marks as changed" do
-        adapter.write(instance, false)
+        adapter.write(instance, new_value)
         expect(instance.api_enabled_changed?).to be true
       end
     end
@@ -324,8 +348,10 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
 
     context "when value has NOT changed" do
+      let(:expected_result) { false }
+
       it "returns false" do
-        expect(adapter.changed?(instance)).to be false
+        expect(adapter.changed?(instance)).to be expected_result
       end
     end
   end
@@ -349,8 +375,10 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
 
     context "when value has NOT changed" do
+      let(:expected_value) { false }
+
       it "returns current value" do
-        expect(adapter.was(instance)).to be false
+        expect(adapter.was(instance)).to be expected_value
       end
     end
   end
@@ -374,12 +402,15 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
 
     context "when value has NOT changed" do
+      let(:expected_change) { nil }
+
       it "returns nil" do
-        expect(adapter.change(instance)).to be_nil
+        expect(adapter.change(instance)).to be expected_change
       end
     end
   end
 
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "integration with ActiveRecord dirty tracking" do
     before do
       JsonTestModel.setting :feature_flags, type: :json, storage: {column: :features} do
@@ -439,6 +470,220 @@ RSpec.describe ModelSettings::Adapters::Json do
 
       it "includes both settings in features changes" do
         expect(instance.features_changed?).to be true
+      end
+    end
+  end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+
+  describe "default values" do
+    before do
+      ActiveRecord::Base.connection.create_table :json_default_test_models, force: true do |t|
+        t.text :settings, default: "{}", null: false
+      end
+
+      stub_const("JsonDefaultTestModel", Class.new(ActiveRecord::Base) do
+        include ModelSettings::DSL
+
+        serialize :settings, coder: JSON
+
+        setting :notifications_enabled,
+          type: :json,
+          storage: {column: :settings},
+          default: true
+
+        setting :max_users,
+          type: :json,
+          storage: {column: :settings},
+          default: 10
+      end)
+    end
+
+    context "when value is set to falsy value" do
+      let(:instance) do
+        model = JsonDefaultTestModel.new
+        model.notifications_enabled = false
+        model.max_users = 0
+        model
+      end
+
+      it "returns the falsy value for boolean" do
+        expect(instance.notifications_enabled).to be false
+      end
+
+      it "returns the falsy value for numeric" do
+        expect(instance.max_users).to eq(0)
+      end
+    end
+
+    context "when value is NOT set" do
+      let(:instance) { JsonDefaultTestModel.new }
+
+      it "returns default for boolean setting" do
+        expect(instance.notifications_enabled).to be true
+      end
+
+      it "returns default for numeric setting" do
+        expect(instance.max_users).to eq(10)
+      end
+    end
+
+    context "when value is explicitly set to nil" do
+      let(:instance) do
+        model = JsonDefaultTestModel.new
+        model.settings = {notifications_enabled: nil, max_users: nil}
+        model
+      end
+
+      it "returns nil instead of default" do
+        expect(instance.notifications_enabled).to be_nil
+      end
+    end
+  end
+
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  describe "array support" do
+    let(:instance) { JsonArrayTestModel.new }
+
+    before do
+      ActiveRecord::Base.connection.create_table :json_array_test_models, force: true do |t|
+        t.text :settings, default: "{}", null: false
+      end
+
+      stub_const("JsonArrayTestModel", Class.new(ActiveRecord::Base) do
+        include ModelSettings::DSL
+
+        serialize :settings, coder: JSON
+
+        setting :allowed_ips,
+          type: :json,
+          storage: {column: :settings},
+          array: true,
+          default: []
+
+        setting :tags,
+          type: :json,
+          storage: {column: :settings},
+          array: true
+      end)
+    end
+
+    it "returns default empty array" do
+      expect(instance.allowed_ips).to eq([])
+    end
+
+    it "allows setting array values" do
+      instance.allowed_ips = ["192.168.1.1", "10.0.0.1"]
+
+      expect(instance.allowed_ips).to eq(["192.168.1.1", "10.0.0.1"])
+    end
+
+    it "tracks array changes" do
+      instance.allowed_ips = ["192.168.1.1"]
+      instance.save!
+      instance.allowed_ips = ["192.168.1.1", "10.0.0.1"]
+
+      expect(instance.allowed_ips_changed?).to be true
+    end
+
+    it "returns previous array value" do
+      instance.allowed_ips = ["192.168.1.1"]
+      instance.save!
+      instance.allowed_ips = ["10.0.0.1"]
+
+      expect(instance.allowed_ips_was).to eq(["192.168.1.1"])
+    end
+
+    it "returns nil for unset array" do
+      expect(instance.tags).to be_nil
+    end
+  end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+
+  describe "nested keys" do
+    before do
+      ActiveRecord::Base.connection.create_table :json_nested_test_models, force: true do |t|
+        t.text :config, default: "{}", null: false
+      end
+
+      stub_const("JsonNestedTestModel", Class.new(ActiveRecord::Base) do
+        include ModelSettings::DSL
+
+        serialize :config, coder: JSON
+
+        setting :api, type: :json, storage: {column: :config} do
+          setting :enabled, default: false
+          setting :rate_limit, default: 100
+
+          setting :oauth do
+            setting :client_id
+            setting :client_secret
+          end
+        end
+      end)
+    end
+
+    context "when accessing nested values" do
+      let(:instance) { JsonNestedTestModel.new }
+
+      it "returns default for first level nested setting" do
+        expect(instance.enabled).to be false
+      end
+
+      it "allows setting first level nested values" do
+        instance.enabled = true
+
+        expect(instance.enabled).to be true
+      end
+
+      it "returns default for second level nested setting" do
+        expect(instance.rate_limit).to eq(100)
+      end
+
+      it "allows setting deeply nested values" do
+        instance.client_id = "abc123"
+
+        expect(instance.client_id).to eq("abc123")
+      end
+
+      it "creates proper nested structure" do
+        instance.client_id = "abc123"
+        instance.client_secret = "secret"
+
+        expect(instance.config).to eq({
+          "api" => {
+            "oauth" => {
+              "client_id" => "abc123",
+              "client_secret" => "secret"
+            }
+          }
+        })
+      end
+    end
+
+    context "when tracking changes in nested structure" do
+      let(:instance) do
+        model = JsonNestedTestModel.new
+        model.enabled = true
+        model.save!
+        model
+      end
+
+      it "detects changes in nested values" do
+        instance.enabled = false
+
+        expect(instance.enabled_changed?).to be true
+      end
+
+      it "returns previous nested value" do
+        instance.rate_limit = 200
+
+        expect(instance.rate_limit_was).to eq(100)
+      end
+
+      it "tracks change array for nested setting" do
+        instance.enabled = false
+
+        expect(instance.enabled_change).to eq([true, false])
       end
     end
   end

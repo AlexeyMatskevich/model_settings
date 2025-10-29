@@ -116,8 +116,7 @@ module ModelSettings
         when :json
           Adapters::Json
         when :store_model
-          # Will be implemented in Phase 1
-          raise NotImplementedError, "StoreModel adapter not yet implemented"
+          Adapters::StoreModel
         else
           raise ArgumentError, "Unknown storage type: #{setting.type}"
         end

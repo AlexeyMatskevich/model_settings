@@ -12,6 +12,7 @@ require_relative "model_settings/dsl"
 require_relative "model_settings/adapters/base"
 require_relative "model_settings/adapters/column"
 require_relative "model_settings/adapters/json"
+require_relative "model_settings/adapters/store_model"
 
 # Optional modules
 require_relative "model_settings/modules/i18n" if defined?(I18n)

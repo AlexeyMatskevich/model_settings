@@ -135,6 +135,36 @@ module ModelSettings
         column_sym = column_name.to_sym
         setting_sym = setting_name.to_sym
         setting_str = setting_name.to_s
+        default_value = setting.options[:default]
+        # Find the root JSON storage setting by walking up the parent chain
+        # until we find a setting with type: :json and storage column
+        root_json_setting = nil
+        current = setting
+        while current
+          if current.options[:type] == :json && current.storage[:column]
+            root_json_setting = current
+          end
+          current = current.parent
+        end
+
+        # Calculate path relative to root JSON setting
+        if setting.options[:nested_key]
+          nested_key_path = setting.options[:nested_key]
+        elsif root_json_setting.nil? || root_json_setting == setting
+          # This is the root JSON setting itself or no JSON storage found
+          nested_key_path = [setting.name]
+        else
+          # Get full path from root JSON setting to current setting
+          path_from_root = []
+          current = setting
+          while current && current != root_json_setting
+            path_from_root.unshift(current.name)
+            current = current.parent
+          end
+          # Add root setting name at the beginning
+          path_from_root.unshift(root_json_setting.name)
+          nested_key_path = path_from_root
+        end
 
         # Track that we're managing this setting
         add_managed_setting(column_sym, setting_sym)
@@ -142,13 +172,45 @@ module ModelSettings
         # Define getter method
         model_class.define_method(setting_sym) do
           data = public_send(column_sym) || {}
-          data[setting_str]
+
+          # Navigate through nested keys if needed
+          if nested_key_path && nested_key_path.size > 1
+            # Check if nested path exists
+            current = data
+            path_exists = nested_key_path[0..-2].all? do |key|
+              current = current[key.to_s] if current.is_a?(Hash)
+              current.is_a?(Hash)
+            end
+
+            if path_exists && current.is_a?(Hash) && current.key?(nested_key_path.last.to_s)
+              current[nested_key_path.last.to_s]
+            else
+              default_value
+            end
+          else
+            # Simple key lookup
+            data.key?(setting_str) ? data[setting_str] : default_value
+          end
         end
 
         # Define setter method with dirty tracking
         model_class.define_method("#{setting_sym}=") do |value|
           data = public_send(column_sym) || {}
-          data[setting_str] = value
+
+          # Handle nested keys
+          if nested_key_path && nested_key_path.size > 1
+            # Build nested structure
+            current = data
+            nested_key_path[0..-2].each do |key|
+              key_str = key.to_s
+              current[key_str] ||= {}
+              current = current[key_str]
+            end
+            current[nested_key_path.last.to_s] = value
+          else
+            data[setting_str] = value
+          end
+
           public_send("#{column_sym}=", data)
         end
 
@@ -158,13 +220,48 @@ module ModelSettings
 
           old_data = public_send("#{column_sym}_was") || {}
           new_data = public_send(column_sym) || {}
-          old_data[setting_str] != new_data[setting_str]
+
+          # Extract old and new values considering nested keys
+          old_value = if nested_key_path && nested_key_path.size > 1
+            nested_key_path.reduce(old_data) do |hash, key|
+              hash.is_a?(Hash) ? hash[key.to_s] : nil
+            end
+          else
+            old_data[setting_str]
+          end
+
+          new_value = if nested_key_path && nested_key_path.size > 1
+            nested_key_path.reduce(new_data) do |hash, key|
+              hash.is_a?(Hash) ? hash[key.to_s] : nil
+            end
+          else
+            new_data[setting_str]
+          end
+
+          # Compare values (arrays use deep comparison automatically)
+          old_value != new_value
         end
 
         # Define _was method
         model_class.define_method("#{setting_sym}_was") do
           old_data = public_send("#{column_sym}_was") || {}
-          old_data[setting_str]
+
+          if nested_key_path && nested_key_path.size > 1
+            # Check if nested path exists
+            current = old_data
+            path_exists = nested_key_path[0..-2].all? do |key|
+              current = current[key.to_s] if current.is_a?(Hash)
+              current.is_a?(Hash)
+            end
+
+            if path_exists && current.is_a?(Hash) && current.key?(nested_key_path.last.to_s)
+              current[nested_key_path.last.to_s]
+            else
+              default_value
+            end
+          else
+            old_data.key?(setting_str) ? old_data[setting_str] : default_value
+          end
         end
 
         # Define _change method
@@ -187,7 +284,10 @@ module ModelSettings
       def setup_nested_settings(column_name)
         setting.children.each do |child_setting|
           child_name = child_setting.name
-          setup_accessors(column_name, child_name)
+
+          # Create adapter for child setting and setup accessors
+          child_adapter = self.class.new(model_class, child_setting)
+          child_adapter.send(:setup_accessors, column_name, child_name)
 
           # Define helper methods for nested settings with callbacks
           model_class.define_method("#{child_name}_enable!") do
@@ -239,6 +339,11 @@ module ModelSettings
 
           model_class.define_method("#{child_name}_disabled?") do
             !public_send(child_name)
+          end
+
+          # Recursively setup nested settings for grandchildren
+          if child_setting.children.any?
+            child_adapter.send(:setup_nested_settings, column_name)
           end
         end
       end
