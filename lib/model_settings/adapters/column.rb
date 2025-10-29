@@ -33,20 +33,51 @@ module ModelSettings
     class Column < Base
       def setup!
         setting_name = setting.name
+        setting_obj = setting
 
-        # Define enable! helper method
+        # Define enable! helper method with callbacks
         model_class.define_method("#{setting_name}_enable!") do
+          # Execute before_enable callback
+          execute_setting_callbacks(setting_obj, :enable, :before)
+
+          # Set the value
           public_send("#{setting_name}=", true)
+
+          # Execute after_enable callback
+          execute_setting_callbacks(setting_obj, :enable, :after)
+
+          # Track for after_commit if needed
+          track_setting_change_for_commit(setting_obj) if setting_obj.options[:after_change_commit]
         end
 
-        # Define disable! helper method
+        # Define disable! helper method with callbacks
         model_class.define_method("#{setting_name}_disable!") do
+          # Execute before_disable callback
+          execute_setting_callbacks(setting_obj, :disable, :before)
+
+          # Set the value
           public_send("#{setting_name}=", false)
+
+          # Execute after_disable callback
+          execute_setting_callbacks(setting_obj, :disable, :after)
+
+          # Track for after_commit if needed
+          track_setting_change_for_commit(setting_obj) if setting_obj.options[:after_change_commit]
         end
 
-        # Define toggle! helper method
+        # Define toggle! helper method with callbacks
         model_class.define_method("#{setting_name}_toggle!") do
+          # Execute before_toggle callback
+          execute_setting_callbacks(setting_obj, :toggle, :before)
+
+          # Toggle the value
           public_send("#{setting_name}=", !public_send(setting_name))
+
+          # Execute after_toggle callback
+          execute_setting_callbacks(setting_obj, :toggle, :after)
+
+          # Track for after_commit if needed
+          track_setting_change_for_commit(setting_obj) if setting_obj.options[:after_change_commit]
         end
 
         # Define enabled? helper (alias for the attribute itself for boolean settings)

@@ -201,10 +201,88 @@ module ModelSettings
         :before_disable,
         :after_disable,
         :before_toggle,
-        :after_toggle
+        :after_toggle,
+        :before_change,
+        :after_change,
+        :around_enable,
+        :around_disable,
+        :around_change,
+        :after_enable_commit,
+        :after_disable_commit,
+        :after_change_commit
       ]
 
       @options.slice(*callback_keys)
+    end
+
+    # Check if setting has a specific option registered
+    #
+    # @param option_name [Symbol] The option name
+    # @return [Boolean] true if option is present
+    def has_option?(option_name)
+      @options.key?(option_name)
+    end
+
+    # Get value for a registered option
+    #
+    # @param option_name [Symbol] The option name
+    # @param default [Object] Default value if option not found
+    # @return [Object] The option value or default
+    def get_option(option_name, default = nil)
+      @options.fetch(option_name, default)
+    end
+
+    # Get all registered custom options (excluding built-in options)
+    #
+    # @return [Hash] Hash of custom options
+    def custom_options
+      built_in_keys = [
+        :type, :storage, :default, :description, :cascade, :deprecated,
+        :metadata, :validate_with, :before_enable, :after_enable,
+        :before_disable, :after_disable, :before_toggle, :after_toggle,
+        :before_change, :after_change, :around_enable, :around_disable,
+        :around_change, :after_enable_commit, :after_disable_commit,
+        :after_change_commit, :sync, :requires
+      ]
+
+      @options.except(*built_in_keys)
+    end
+
+    # Deep merge options for inheritance
+    #
+    # Merges parent options with child options, with child taking precedence.
+    # Handles special cases like metadata which should be merged, not replaced.
+    #
+    # @param parent_options [Hash] Parent setting options
+    # @param child_options [Hash] Child setting options
+    # @return [Hash] Merged options
+    def self.merge_inherited_options(parent_options, child_options)
+      merged = parent_options.dup
+
+      child_options.each do |key, value|
+        merged[key] = case key
+        when :metadata
+          # Deep merge metadata
+          (merged[key] || {}).merge(value)
+        when :cascade
+          # Deep merge cascade configuration
+          (merged[key] || {}).merge(value)
+        else
+          # Simple override for other options
+          value
+        end
+      end
+
+      merged
+    end
+
+    # Get all inheritable option values (including from parent chain)
+    #
+    # @return [Hash] Hash of all inherited options
+    def all_inherited_options
+      return @options.dup unless parent
+
+      self.class.merge_inherited_options(parent.all_inherited_options, @options)
     end
   end
 end

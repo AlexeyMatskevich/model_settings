@@ -514,4 +514,164 @@ RSpec.describe ModelSettings::Setting do
       end
     end
   end
+
+  describe "#has_option?" do
+    subject(:setting) { described_class.new(:flag, options) }
+
+    context "when option is present" do
+      let(:options) { {custom_option: "value"} }
+
+      it "returns true" do
+        expect(setting.has_option?(:custom_option)).to be true
+      end
+    end
+
+    context "when option is NOT present" do
+      let(:options) { {} }
+
+      it "returns false" do
+        expect(setting.has_option?(:custom_option)).to be false
+      end
+    end
+  end
+
+  describe "#get_option" do
+    subject(:setting) { described_class.new(:flag, options) }
+
+    context "when option exists" do
+      let(:options) { {custom_option: "value"} }
+
+      it "returns option value" do
+        expect(setting.get_option(:custom_option)).to eq("value")
+      end
+    end
+
+    context "when option does NOT exist" do
+      let(:options) { {} }
+      let(:default_value) { "default" }
+
+      it "returns nil without default" do
+        expect(setting.get_option(:custom_option)).to be_nil
+      end
+
+      it "returns default value with default" do
+        expect(setting.get_option(:custom_option, default_value)).to eq("default")
+      end
+    end
+  end
+
+  describe "#custom_options" do
+    subject(:setting) { described_class.new(:flag, options) }
+
+    context "when only built-in options present" do
+      let(:options) { {type: :column, default: false, description: "Test"} }
+
+      it "returns empty hash" do
+        expect(setting.custom_options).to be_empty
+      end
+    end
+
+    context "when custom options present" do
+      let(:options) do
+        {
+          type: :column,
+          viewable_by: [:admin],
+          ui_group: :advanced,
+          custom_meta: "data"
+        }
+      end
+
+      it "returns only custom options" do
+        expect(setting.custom_options).to eq({
+          viewable_by: [:admin],
+          ui_group: :advanced,
+          custom_meta: "data"
+        })
+      end
+    end
+  end
+
+  describe ".merge_inherited_options" do
+    subject(:merged) do
+      described_class.merge_inherited_options(parent_options, child_options)
+    end
+
+    let(:parent_options) { {type: :json, default: false, metadata: {tier: "basic"}} }
+
+    context "when child overrides simple option" do
+      let(:child_options) { {default: true} }
+
+      it "uses child value" do
+        expect(merged[:default]).to be true
+      end
+
+      it "keeps parent value for non-overridden options" do
+        expect(merged[:type]).to eq(:json)
+      end
+    end
+
+    context "when child adds metadata" do
+      let(:child_options) { {metadata: {owner: "team"}} }
+
+      it "deep merges metadata" do
+        expect(merged[:metadata]).to eq({tier: "basic", owner: "team"})
+      end
+    end
+
+    context "when child overrides metadata key" do
+      let(:child_options) { {metadata: {tier: "premium"}} }
+
+      it "uses child metadata value" do
+        expect(merged[:metadata]).to eq({tier: "premium"})
+      end
+    end
+
+    context "when child adds cascade configuration" do
+      let(:parent_options) { {cascade: {enable: true}} }
+      let(:child_options) { {cascade: {disable: false}} }
+
+      it "deep merges cascade" do
+        expect(merged[:cascade]).to eq({enable: true, disable: false})
+      end
+    end
+  end
+
+  describe "#all_inherited_options" do
+    subject(:all_options) { child.all_inherited_options }
+
+    context "when setting has no parent" do
+      let(:child) { described_class.new(:root, {type: :column, default: false}) }
+
+      it "returns own options" do
+        expect(all_options).to eq({type: :column, default: false})
+      end
+    end
+
+    context "when setting has parent" do
+      let(:parent) { described_class.new(:parent, {type: :json, metadata: {tier: "basic"}}) }
+      let(:child) { described_class.new(:child, {default: true, metadata: {owner: "team"}}, parent: parent) }
+
+      it "merges parent and child options" do
+        expect(all_options).to include(
+          type: :json,
+          default: true,
+          metadata: {tier: "basic", owner: "team"}
+        )
+      end
+    end
+
+    context "when setting has grandparent" do
+      let(:grandparent) { described_class.new(:gp, {type: :json, metadata: {tier: "basic"}}) }
+      let(:parent) { described_class.new(:parent, {default: false, metadata: {category: "feature"}}, parent: grandparent) }
+      let(:child) { described_class.new(:child, {metadata: {owner: "team"}}, parent: parent) }
+
+      it "merges all ancestor options" do
+        expect(all_options).to include(
+          type: :json,
+          default: false,
+          metadata: {tier: "basic", category: "feature", owner: "team"}
+        )
+      end
+    end
+  end
 end

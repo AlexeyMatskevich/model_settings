@@ -16,11 +16,26 @@ module ModelSettings
     extend ActiveSupport::Concern
 
     included do
+      # Include core modules
+      include ModelSettings::Callbacks
+      include ModelSettings::Validation
+      include ModelSettings::Deprecation
+      include ModelSettings::Query
+
+      # Include optional modules if available
+      include ModelSettings::Modules::I18n if defined?(ModelSettings::Modules::I18n)
+
       # Store all settings defined on this model
       class_attribute :_settings, default: []
 
       # Store settings by name for quick lookup
       class_attribute :_settings_by_name, default: {}
+
+      # Track if settings have been compiled
+      class_attribute :_settings_compiled, default: false
+
+      # Track active modules for this model
+      class_attribute :_active_modules, default: []
     end
 
     class_methods do
@@ -59,6 +74,9 @@ module ModelSettings
         parent_setting = @_current_setting_context
         setting_obj = Setting.new(name, options, parent: parent_setting)
 
+        # Validate registered options
+        ModelSettings::ModuleRegistry.validate_setting_options!(setting_obj)
+
         # Add to parent or root collection
         if parent_setting
           parent_setting.add_child(setting_obj)
@@ -66,6 +84,9 @@ module ModelSettings
           self._settings = _settings + [setting_obj]
           self._settings_by_name = _settings_by_name.merge(name => setting_obj)
         end
+
+        # Execute definition hooks
+        ModelSettings::ModuleRegistry.execute_definition_hooks(setting_obj, self)
 
         # Process nested settings if block given
         if block_given?
@@ -93,10 +114,9 @@ module ModelSettings
         when :column
           Adapters::Column
         when :json
-          # Will be implemented in Sprint 2
-          raise NotImplementedError, "JSON adapter not yet implemented"
+          Adapters::Json
         when :store_model
-          # Will be implemented in Sprint 2
+          # Will be implemented in Phase 1
           raise NotImplementedError, "StoreModel adapter not yet implemented"
         else
           raise ArgumentError, "Unknown storage type: #{setting.type}"
@@ -161,6 +181,62 @@ module ModelSettings
       # @return [Array<Setting>] Flattened array of all settings
       def all_settings_recursive
         _settings.flat_map { |s| [s] + s.descendants }
+      end
+
+      # Compile settings and run compilation hooks
+      #
+      # This method should be called after all settings are defined
+      # (typically happens automatically when the class is loaded).
+      # It runs compilation hooks and marks settings as compiled.
+      #
+      # @return [void]
+      def compile_settings!
+        return if _settings_compiled
+
+        # Execute compilation hooks
+        ModelSettings::ModuleRegistry.execute_compilation_hooks(all_settings_recursive, self)
+
+        # Mark as compiled
+        self._settings_compiled = true
+      end
+
+      # Add a module to the model's active modules list
+      #
+      # @param module_name [Symbol] Name of the module to activate
+      # @return [void]
+      def settings_add_module(module_name)
+        return if _active_modules.include?(module_name)
+
+        self._active_modules = _active_modules + [module_name]
+
+        # Validate exclusive groups
+        ModelSettings::ModuleRegistry.validate_exclusive_groups!(_active_modules)
+      end
+
+      # Configure model-specific settings
+      #
+      # @param options [Hash] Configuration options
+      # @option options [Boolean] :inherit_authorization Whether to inherit authorization settings
+      # @option options [Array<Symbol>] :modules Additional modules to include
+      # @return [void]
+      def settings_config(**options)
+        options.each do |key, value|
+          case key
+          when :modules
+            Array(value).each { |mod| settings_add_module(mod) }
+          when :inherit_authorization
+            # Store for later use by authorization modules
+            class_attribute :_settings_inherit_authorization, default: value
+          end
+        end
+      end
+
+      # Configure modules for this model
+      #
+      # @param module_names [Array<Symbol>] Names of modules to activate
+      # @return [void]
+      def settings_modules(*module_names)
+        module_names.flatten.each { |mod| settings_add_module(mod) }
       end
 
       private
