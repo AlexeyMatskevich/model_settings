@@ -1,0 +1,110 @@
+# RuboCop extensions configuration for StandardRB
+# Based on: https://github.com/AlexeyMatskevich/rspec-guide/blob/main/rubocop-configs/.rubocop.yml.example
+
+require:
+  - rubocop-rspec
+  - rubocop-rspec-guide
+
+plugins:
+  - rubocop-factory_bot
+
+# === RSpec Core Cops ===
+
+RSpec/VerifiedDoubles:
+  Enabled: true
+
+RSpec/AnyInstance:
+  Enabled: true
+
+RSpec/MessageSpies:
+  Enabled: true
+  EnforcedStyle: have_received
+
+RSpec/MultipleExpectations:
+  Max: 1
+  Exclude:
+    - "spec/requests/**/*_spec.rb"
+    - "spec/system/**/*_spec.rb"
+    - "spec/features/**/*_spec.rb"
+
+RSpec/ExampleLength:
+  Max: 10
+  CountAsOne: [array, hash, heredoc]
+  Exclude:
+    - "spec/requests/**/*_spec.rb"
+    - "spec/system/**/*_spec.rb"
+    - "spec/features/**/*_spec.rb"
+
+RSpec/NestedGroups:
+  Max: 4
+
+RSpec/EmptyExampleGroup:
+  Enabled: true
+
+RSpec/NamedSubject:
+  Enabled: true
+
+RSpec/ImplicitSubject:
+  Enabled: true
+  EnforcedStyle: single_line_only
+
+RSpec/LeadingSubject:
+  Enabled: true
+
+RSpec/ExampleWording:
+  Enabled: true
+  DisallowedExamples:
+    - works
+
+RSpec/ContextWording:
+  Enabled: true
+  Prefixes:
+    - when
+    - with
+    - without
+    - and
+    - but
+
+RSpec/SharedContext:
+  Enabled: true
+
+RSpec/SharedExamples:
+  Enabled: true
+
+# === FactoryBot Cops ===
+
+FactoryBot/CreateList:
+  Enabled: true
+
+FactoryBot/ConsistentParenthesesStyle:
+  Enabled: true
+  EnforcedStyle: require_parentheses
+
+FactoryBot/SyntaxMethods:
+  Enabled: true
+
+# === RSpec Guide Custom Cops ===
+
+RSpecGuide/CharacteristicsAndContexts:
+  Enabled: true
+
+RSpecGuide/HappyPathFirst:
+  Enabled: true
+
+RSpecGuide/ContextSetup:
+  Enabled: true
+
+RSpecGuide/DuplicateLetValues:
+  Enabled: true
+
+RSpecGuide/DuplicateBeforeHooks:
+  Enabled: true
+
+RSpecGuide/InvariantExamples:
+  Enabled: true
+  MinLeafContexts: 3
+
+# === FactoryBot Guide Custom Cops ===
+
+FactoryBotGuide/DynamicAttributesForTimeAndRandom:
+  Enabled: true
