@@ -284,5 +284,31 @@ module ModelSettings
 
       self.class.merge_inherited_options(parent.all_inherited_options, @options)
     end
+
+    # Check if this setting needs its own storage adapter
+    #
+    # A setting needs its own adapter if:
+    # - It's a root setting (no parent), OR
+    # - It's a column type (each column setting has its own storage), OR
+    # - It's JSON/StoreModel with explicit storage column (independent storage from parent)
+    #
+    # @return [Boolean] true if setting needs its own adapter
+    def needs_own_adapter?
+      # Root settings always need their own adapter
+      return true if parent.nil?
+
+      # Column type always needs own adapter (each column = separate storage)
+      return true if type == :column
+
+      # JSON/StoreModel need adapter only if they have explicit storage column
+      # If no storage specified, they're part of parent's structure
+      if [:json, :store_model].include?(type)
+        has_storage_column = storage[:column] || storage["column"]
+        return true if has_storage_column
+      end
+
+      # Otherwise, use parent's adapter
+      false
+    end
   end
 end

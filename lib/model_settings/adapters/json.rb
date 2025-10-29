@@ -136,15 +136,22 @@ module ModelSettings
         setting_sym = setting_name.to_sym
         setting_str = setting_name.to_s
         default_value = setting.options[:default]
-        # Find the root JSON storage setting by walking up the parent chain
-        # until we find a setting with type: :json and storage column
-        root_json_setting = nil
-        current = setting
-        while current
-          if current.options[:type] == :json && current.storage[:column]
-            root_json_setting = current
+        # If this setting has its own storage column, it's a root JSON setting
+        # Otherwise, find the root JSON storage setting by walking up the parent chain
+        if setting.storage[:column] || setting.storage["column"]
+          # This setting has explicit storage - it's root for itself
+          root_json_setting = setting
+        else
+          # Find parent JSON setting with storage
+          root_json_setting = nil
+          current = setting.parent
+          while current
+            if current.options[:type] == :json && current.storage[:column]
+              root_json_setting = current
+              break
+            end
+            current = current.parent
           end
-          current = current.parent
         end
 
         # Calculate path relative to root JSON setting
@@ -171,7 +178,9 @@ module ModelSettings
 
         # Define getter method
         model_class.define_method(setting_sym) do
-          data = public_send(column_sym) || {}
+          raw_data = public_send(column_sym)
+          # Ensure data is Hash, initialize if nil or non-Hash
+          data = raw_data.is_a?(Hash) ? raw_data : {}
 
           # Navigate through nested keys if needed
           if nested_key_path && nested_key_path.size > 1

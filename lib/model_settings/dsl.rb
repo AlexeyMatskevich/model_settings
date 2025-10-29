@@ -36,6 +36,12 @@ module ModelSettings
 
       # Track active modules for this model
       class_attribute :_active_modules, default: []
+
+      # Dependency engine for cascades and syncs
+      class_attribute :_dependency_engine
+
+      # Hook into ActiveRecord lifecycle for cascades and syncs
+      before_save :apply_setting_cascades_and_syncs if respond_to?(:before_save)
     end
 
     class_methods do
@@ -96,8 +102,9 @@ module ModelSettings
           @_current_setting_context = previous_context
         end
 
-        # Setup storage adapter for this setting (only for root settings)
-        if !parent_setting
+        # Setup storage adapter if setting needs own storage
+        # (root settings, column types, or JSON/StoreModel with explicit storage)
+        if setting_obj.needs_own_adapter?
           adapter = create_adapter_for(setting_obj)
           adapter.setup!
         end
@@ -195,6 +202,10 @@ module ModelSettings
         # Execute compilation hooks
         ModelSettings::ModuleRegistry.execute_compilation_hooks(all_settings_recursive, self)
 
+        # Initialize and compile dependency engine
+        self._dependency_engine = DependencyEngine.new(self)
+        _dependency_engine.compile!
+
         # Mark as compiled
         self._settings_compiled = true
       end
@@ -242,6 +253,40 @@ module ModelSettings
 
       # Track current setting context for nested definitions
       attr_accessor :_current_setting_context
+    end
+
+    # Instance methods
+    private
+
+    # Apply cascades and syncs before saving
+    #
+    # This method detects which settings have changed and applies
+    # cascades and syncs according to the dependency graph.
+    #
+    # @return [void]
+    def apply_setting_cascades_and_syncs
+      return unless self.class._dependency_engine
+
+      # Find all changed root settings (check each root setting once)
+      changed_root_settings = self.class.root_settings.select do |root_setting|
+        adapter = self.class.create_adapter_for(root_setting)
+        adapter.changed?(self)
+      end
+
+      # Collect all changed settings (root + descendants)
+      changed_settings = changed_root_settings.flat_map do |root|
+        [root] + root.descendants
+      end.select do |setting|
+        # Check if this specific setting changed
+
+        public_send("#{setting.name}_changed?")
+      rescue NoMethodError
+        # For nested settings in JSON/StoreModel, check parent
+        false
+      end
+
+      # Apply cascades and syncs
+      self.class._dependency_engine.execute_cascades_and_syncs(self, changed_settings)
     end
   end
 end
