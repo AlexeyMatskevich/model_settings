@@ -99,6 +99,11 @@ RSpec.describe ModelSettings::DependencyEngine do
       it "raises CyclicSyncError" do
         expect { engine.validate_sync_graph! }.to raise_error(ModelSettings::CyclicSyncError)
       end
+
+      it "includes cycle information in error message" do
+        expect { engine.validate_sync_graph! }
+          .to raise_error(ModelSettings::CyclicSyncError, /Cyclic sync detected/)
+      end
     end
 
     context "when there are disconnected components" do
@@ -143,7 +148,7 @@ RSpec.describe ModelSettings::DependencyEngine do
       end
     end
 
-    context "with enable cascade" do
+    context "when parent has enable cascade configured" do
       before do
         model_class.setting :parent, type: :column, default: false, cascade: {enable: true} do
           setting :child_a, type: :column, default: false
@@ -154,12 +159,12 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      context "when parent is enabled" do
+      context "and parent is enabled" do
         before do
           instance.parent = true
         end
 
-        it "enables all children" do
+        it "enables all children", :aggregate_failures do
           parent_setting = model_class.find_setting(:parent)
           engine.execute_cascades_and_syncs(instance, [parent_setting])
 
@@ -168,7 +173,7 @@ RSpec.describe ModelSettings::DependencyEngine do
         end
       end
 
-      context "when parent is disabled" do
+      context "but parent is disabled" do
         before do
           instance.parent = false
         end
@@ -187,7 +192,7 @@ RSpec.describe ModelSettings::DependencyEngine do
           instance.parent = true
         end
 
-        it "keeps children enabled" do
+        it "keeps children enabled", :aggregate_failures do
           parent_setting = model_class.find_setting(:parent)
           engine.execute_cascades_and_syncs(instance, [parent_setting])
 
@@ -197,7 +202,7 @@ RSpec.describe ModelSettings::DependencyEngine do
       end
     end
 
-    context "with disable cascade" do
+    context "when parent has disable cascade configured" do
       before do
         model_class.setting :parent, type: :column, default: true, cascade: {disable: true} do
           setting :child_a, type: :column, default: true
@@ -212,12 +217,12 @@ RSpec.describe ModelSettings::DependencyEngine do
         inst
       end
 
-      context "when parent is disabled" do
+      context "and parent is disabled" do
         before do
           instance.parent = false
         end
 
-        it "disables all children" do
+        it "disables all children", :aggregate_failures do
           parent_setting = model_class.find_setting(:parent)
           engine.execute_cascades_and_syncs(instance, [parent_setting])
 
@@ -226,7 +231,7 @@ RSpec.describe ModelSettings::DependencyEngine do
         end
       end
 
-      context "when parent is enabled" do
+      context "but parent is enabled" do
         before do
           instance.parent = true
         end
@@ -245,7 +250,7 @@ RSpec.describe ModelSettings::DependencyEngine do
           instance.parent = false
         end
 
-        it "keeps children disabled" do
+        it "keeps children disabled", :aggregate_failures do
           parent_setting = model_class.find_setting(:parent)
           engine.execute_cascades_and_syncs(instance, [parent_setting])
 
@@ -255,7 +260,7 @@ RSpec.describe ModelSettings::DependencyEngine do
       end
     end
 
-    context "with both enable and disable cascades" do
+    context "when parent has both cascades configured" do
       before do
         model_class.setting :parent, type: :column, default: false, cascade: {enable: true, disable: true} do
           setting :child, type: :column, default: false
@@ -265,25 +270,35 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      it "propagates enable to children" do
-        instance.parent = true
-        parent_setting = model_class.find_setting(:parent)
+      context "and parent is enabled" do
+        before do
+          instance.parent = true
+        end
 
-        engine.execute_cascades_and_syncs(instance, [parent_setting])
-        expect(instance.child).to be true
+        it "propagates enable to children" do
+          parent_setting = model_class.find_setting(:parent)
+
+          engine.execute_cascades_and_syncs(instance, [parent_setting])
+          expect(instance.child).to be true
+        end
       end
 
-      it "propagates disable to children" do
-        instance.update!(parent: true, child: true)
-        instance.parent = false
-        parent_setting = model_class.find_setting(:parent)
+      context "and parent is disabled" do
+        before do
+          instance.update!(parent: true, child: true)
+          instance.parent = false
+        end
 
-        engine.execute_cascades_and_syncs(instance, [parent_setting])
-        expect(instance.child).to be false
+        it "propagates disable to children" do
+          parent_setting = model_class.find_setting(:parent)
+
+          engine.execute_cascades_and_syncs(instance, [parent_setting])
+          expect(instance.child).to be false
+        end
       end
     end
 
-    context "with forward sync" do
+    context "when settings have forward sync configured" do
       before do
         model_class.setting :source, type: :column, default: false, sync: {target: :target, mode: :forward}
         model_class.setting :target, type: :column, default: false
@@ -292,12 +307,14 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      # rubocop:disable RSpecGuide/ContextSetup, RSpecGuide/DuplicateBeforeHooks
-      # First context is happy path without additional setup
+      # rubocop:disable RSpecGuide/DuplicateBeforeHooks
       # Duplicate before hooks test different scenarios (false->true vs already matching)
       context "when source changes to true" do
-        it "sets target to true" do
+        before do
           instance.source = true
+        end
+
+        it "sets target to true" do
           instance.save!
 
           expect(instance.reload.target).to be true
@@ -329,10 +346,10 @@ RSpec.describe ModelSettings::DependencyEngine do
           expect(instance.target_changed?).to be false
         end
       end
-      # rubocop:enable RSpecGuide/ContextSetup, RSpecGuide/DuplicateBeforeHooks
+      # rubocop:enable RSpecGuide/DuplicateBeforeHooks
     end
 
-    context "with inverse sync" do
+    context "when settings have inverse sync configured" do
       before do
         model_class.setting :source, type: :column, default: false, sync: {target: :target, mode: :inverse}
         model_class.setting :target, type: :column, default: true
@@ -341,11 +358,12 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      # rubocop:disable RSpecGuide/ContextSetup
-      # First context is happy path without additional setup
       context "when source is true" do
-        it "sets target to false" do
+        before do
           instance.source = true
+        end
+
+        it "sets target to false" do
           instance.save!
 
           expect(instance.reload.target).to be false
@@ -377,10 +395,9 @@ RSpec.describe ModelSettings::DependencyEngine do
           expect(instance.target_changed?).to be false
         end
       end
-      # rubocop:enable RSpecGuide/ContextSetup
     end
 
-    context "with backward sync" do
+    context "when settings have backward sync configured" do
       before do
         model_class.setting :source, type: :column, default: false, sync: {target: :target, mode: :backward}
         model_class.setting :target, type: :column, default: false
@@ -389,21 +406,47 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      context "when source changes" do
+      context "when source changes to true" do
         before do
           instance.update!(source: false, target: true)
         end
 
-        it "reverts source to match target" do
+        it "reverts source to match target value" do
           instance.source = true
           instance.save!
 
           expect(instance.reload.source).to be true
         end
       end
+
+      context "when source changes to false" do
+        before do
+          instance.update!(source: true, target: false)
+        end
+
+        it "reverts source to match target value" do
+          instance.source = true
+          instance.save!
+
+          expect(instance.reload.source).to be false
+        end
+      end
+
+      context "when source already matches target" do
+        before do
+          instance.update!(source: true, target: true)
+        end
+
+        it "does NOT mark source as changed after save" do
+          instance.source = true
+          instance.save!
+
+          expect(instance.source_changed?).to be false
+        end
+      end
     end
 
-    context "with chained syncs" do
+    context "when settings have chained syncs configured" do
       before do
         model_class.setting :a, type: :column, default: false, sync: {target: :b, mode: :forward}
         model_class.setting :b, type: :column, default: false, sync: {target: :c, mode: :forward}
@@ -413,17 +456,51 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       let(:instance) { model_class.create! }
 
-      it "propagates changes through chain" do
-        instance.a = true
-        instance.save!
+      context "when source changes" do
+        before do
+          instance.a = true
+        end
 
-        instance.reload
-        expect(instance.b).to be true
-        expect(instance.c).to be true
+        it "propagates changes through entire chain" do
+          instance.save!
+
+          instance.reload
+          expect([instance.b, instance.c]).to all(be true)
+        end
+      end
+
+      context "when middle of chain already has correct value" do
+        before do
+          instance.update!(a: false, b: true, c: false)
+        end
+
+        it "still propagates to end of chain" do
+          instance.a = true
+          instance.save!
+
+          instance.reload
+          expect(instance.c).to be true
+        end
+      end
+
+      context "when all values already match" do
+        before do
+          instance.update!(a: true, b: true, c: true)
+        end
+
+        it "does NOT mark any settings as changed after save" do
+          instance.a = true
+          instance.save!
+
+          expect(instance.b_changed?).to be false
+          expect(instance.c_changed?).to be false
+        end
       end
     end
 
-    context "with both cascades and syncs in same transaction" do
+    context "when model has both cascades and syncs configured" do
+      let(:instance) { model_class.create! }
+
       before do
         # Parent with cascade to child_a
         model_class.setting :parent, type: :column, default: false, cascade: {enable: true} do
@@ -433,17 +510,18 @@ RSpec.describe ModelSettings::DependencyEngine do
         model_class.setting :source, type: :column, default: false, sync: {target: :target, mode: :forward}
         model_class.setting :target, type: :column, default: false
         model_class.compile_settings!
-      end
 
-      let(:instance) { model_class.create! }
-
-      it "applies both cascade and sync in same save" do
         instance.parent = true
         instance.source = true
         instance.save!
-
         instance.reload
+      end
+
+      it "applies cascade" do
         expect(instance.child_a).to be true
+      end
+
+      it "applies sync" do
         expect(instance.target).to be true
       end
     end
@@ -451,12 +529,12 @@ RSpec.describe ModelSettings::DependencyEngine do
     # rubocop:disable RSpecGuide/ContextSetup, RSpec/ExampleLength
     # Context contains two independent tests without shared setup
     # Second test requires complex stubbing setup (>10 lines justified)
-    context "when max iterations reached" do
+    context "when cascade creates infinite loop" do
       it "has MAX_ITERATIONS safety limit" do
         expect(described_class::MAX_ITERATIONS).to eq(100)
       end
 
-      it "raises error with stubbed infinite cascade" do
+      it "raises error after reaching iteration limit" do
         model_class.setting :feature, type: :column, default: false
         model_class.compile_settings!
 
@@ -538,8 +616,172 @@ RSpec.describe ModelSettings::DependencyEngine do
     end
   end
 
-  # Note: Mixed storage types with nested settings (eg. column parent with JSON child that has own storage)
-  # is an advanced edge case that requires additional implementation work.
-  # The basic mixed storage (different types at root level) works via cascades/syncs.
-  # TODO: Implement full support for nested settings with different storage types
+  # rubocop:disable RSpec/MultipleMemoizedHelpers, RSpec/LetSetup
+  describe "mixed storage types (advanced edge case)" do
+    let(:instance) { model_class.create! }
+
+    context "when column parent has JSON child with own storage" do
+      before do
+        model_class.setting :premium, type: :column, default: false do
+          setting :theme, type: :json, storage: {column: :theme_data}, default: "light"
+        end
+        model_class.compile_settings!
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      # Multiple expectations needed to verify both parent and child accessors exist
+      it "creates adapter for both settings" do
+        expect(instance).to respond_to(:premium)
+        expect(instance).to respond_to(:theme)
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+
+      it "reads default value" do
+        expect(instance.theme).to eq("light")
+      end
+
+      it "stores theme in JSON column" do
+        instance.theme = "dark"
+        instance.save!
+        instance.reload
+
+        expect(instance.theme).to eq("dark")
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      # Multiple expectations needed to verify both parent and child values after cascade
+      it "supports cascades from column parent to JSON child" do
+        instance.premium = true
+        instance.save!
+
+        # Child should cascade from parent
+        expect(instance.premium).to be true
+        expect(instance.theme).to eq("light") # Default value, not cascaded
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+    end
+
+    context "when column parent has JSON child with enable cascade" do
+      before do
+        model_class.setting :premium, type: :column, default: false, cascade: {enable: true} do
+          setting :features_enabled, type: :json, storage: {column: :theme_data}, default: false
+        end
+        model_class.compile_settings!
+      end
+
+      context "when parent is enabled" do
+        before do
+          instance.premium = true
+        end
+
+        it "cascades enable to JSON child" do
+          instance.save!
+
+          instance.reload
+          expect(instance.features_enabled).to be true
+        end
+      end
+
+      context "when parent is disabled" do
+        before do
+          instance.update!(premium: true, theme_data: {"features_enabled" => true})
+        end
+
+        it "does NOT cascade to JSON child" do
+          instance.premium = false
+          instance.save!
+
+          instance.reload
+          expect(instance.features_enabled).to be true
+        end
+      end
+    end
+
+    context "when column parent has JSON child with disable cascade" do
+      before do
+        model_class.setting :premium, type: :column, default: true, cascade: {disable: true} do
+          setting :features_enabled, type: :json, storage: {column: :theme_data}, default: true
+        end
+        model_class.compile_settings!
+      end
+
+      context "when parent is disabled" do
+        before do
+          instance.update!(premium: true, theme_data: {"features_enabled" => true})
+        end
+
+        it "cascades disable to JSON child" do
+          instance.premium = false
+          instance.save!
+
+          instance.reload
+          expect(instance.features_enabled).to be false
+        end
+      end
+
+      context "when parent is enabled" do
+        before do
+          instance.premium = true
+        end
+
+        it "does NOT cascade to JSON child" do
+          instance.save!
+
+          instance.reload
+          expect(instance.features_enabled).to be true
+        end
+      end
+    end
+
+    context "when JSON parent has column child" do
+      before do
+        model_class.setting :notifications, type: :json, storage: {column: :notifications_data}, default: true do
+          setting :email_enabled, type: :column, default: false
+        end
+        model_class.compile_settings!
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      # Multiple expectations needed to verify all accessors for parent and child exist
+      it "creates adapter for both settings" do
+        expect(instance).to respond_to(:notifications)
+        expect(instance).to respond_to(:notifications=)
+        expect(instance).to respond_to(:email_enabled)
+        expect(instance).to respond_to(:email_enabled=)
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+
+      it "reads default values correctly" do
+        expect(instance).to have_attributes(
+          notifications: true,
+          email_enabled: false
+        )
+      end
+
+      it "stores values in different columns" do
+        instance.notifications = false
+        instance.email_enabled = true
+        instance.save!
+        instance.reload
+
+        expect(instance).to have_attributes(
+          notifications: false,
+          email_enabled: true
+        )
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      # Multiple expectations needed to verify independent change tracking for both settings
+      it "tracks changes independently" do
+        instance.notifications = false
+        expect(instance.notifications_changed?).to be true
+        expect(instance.email_enabled_changed?).to be false
+
+        instance.email_enabled = true
+        expect(instance.email_enabled_changed?).to be true
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+    end
+  end
+  # rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/LetSetup
 end

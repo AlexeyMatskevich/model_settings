@@ -38,6 +38,12 @@ module ModelSettings
         column_name = storage_column
         setting_obj = setting
 
+        # Setup JSON serialization for the storage column if this is a root JSON setting
+        # This ensures t.text columns properly serialize/deserialize JSON data
+        if setting.needs_own_adapter?
+          setup_column_serialization(column_name)
+        end
+
         # Setup accessor methods for this setting
         setup_accessors(column_name, setting_name)
 
@@ -128,6 +134,45 @@ module ModelSettings
         storage = setting.storage
         return storage[:column] if storage.is_a?(Hash) && storage[:column]
         raise ArgumentError, "JSON adapter requires storage: {column: :column_name}"
+      end
+
+      # Setup JSON serialization for a column
+      #
+      # This ensures that text columns properly serialize/deserialize JSON data.
+      # For databases with native JSON support (PostgreSQL jsonb), this is automatic.
+      # For text columns, we need to explicitly configure serialization.
+      #
+      # @param column_name [Symbol] The column to configure
+      # @return [void]
+      def setup_column_serialization(column_name)
+        # Track which columns we've already configured to avoid duplicate setup
+        # Use class-level tracking since multiple adapter instances may exist
+        ivar_name = :@_json_serialized_columns
+        configured_columns = model_class.instance_variable_get(ivar_name) || []
+        return if configured_columns.include?(column_name)
+
+        # Check column type - native JSON columns don't need serialization
+        # Rescue ArgumentError for anonymous classes used in tests
+        if model_class.respond_to?(:columns_hash)
+          begin
+            column = model_class.columns_hash[column_name.to_s]
+            if column
+              # PostgreSQL jsonb/json types handle serialization automatically
+              if [:jsonb, :json].include?(column.type)
+                model_class.instance_variable_set(ivar_name, configured_columns + [column_name])
+                return
+              end
+            end
+          rescue ArgumentError
+            # Anonymous classes don't have table names, just proceed with serialization
+          end
+        end
+
+        # Setup ActiveRecord serialization for text columns
+        # This converts Hash <-> String automatically on read/write
+        # In ActiveRecord 8+, use coder: JSON
+        model_class.serialize(column_name, coder: JSON)
+        model_class.instance_variable_set(ivar_name, configured_columns + [column_name])
       end
 
       # Setup accessor methods for a setting within a JSON column
@@ -292,6 +337,10 @@ module ModelSettings
       # Setup nested settings within the same JSON column
       def setup_nested_settings(column_name)
         setting.children.each do |child_setting|
+          # Skip children that need their own adapter (explicit storage column)
+          # Those are handled by the DSL directly
+          next if child_setting.needs_own_adapter?
+
           child_name = child_setting.name
 
           # Create adapter for child setting and setup accessors
