@@ -11,3 +11,4 @@
 # rspec failure tracking
 .rspec_status
 PLAN.md
+docs/DOCUMENTATION_REORG_PLAN.md
