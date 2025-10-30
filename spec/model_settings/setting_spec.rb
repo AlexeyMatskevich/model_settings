@@ -137,8 +137,8 @@ RSpec.describe ModelSettings::Setting do
     context "when cascade is NOT specified" do
       let(:options) { {} }
 
-      it "defaults to enable and disable both true" do
-        expect(setting.cascade).to eq({enable: true, disable: true})
+      it "returns nil" do
+        expect(setting.cascade).to be_nil
       end
     end
   end

@@ -26,6 +26,7 @@ RSpec/MultipleExpectations:
     - "spec/requests/**/*_spec.rb"
     - "spec/system/**/*_spec.rb"
     - "spec/features/**/*_spec.rb"
+    - "spec/model_settings/documentation_spec.rb"
 
 RSpec/ExampleLength:
   Max: 10
@@ -37,6 +38,8 @@ RSpec/ExampleLength:
 
 RSpec/NestedGroups:
   Max: 4
+  Exclude:
+    - "spec/model_settings/documentation_spec.rb"
 
 RSpec/EmptyExampleGroup:
   Enabled: true
@@ -93,6 +96,8 @@ RSpecGuide/HappyPathFirst:
 
 RSpecGuide/ContextSetup:
   Enabled: true
+  Exclude:
+    - "spec/model_settings/documentation_spec.rb"
 
 RSpecGuide/DuplicateLetValues:
   Enabled: true

@@ -256,7 +256,60 @@ module ModelSettings
         module_names.flatten.each { |mod| settings_add_module(mod) }
       end
 
+      # Generate documentation for this model's settings
+      #
+      # @param format [Symbol] Output format (:markdown, :json, :yaml)
+      # @param filter [Symbol, Proc] Filter settings (:active, :deprecated, or custom proc)
+      # @return [String] Generated documentation
+      #
+      # @example Generate markdown documentation
+      #   docs = User.settings_documentation(format: :markdown)
+      #   File.write('docs/user_settings.md', docs)
+      #
+      # @example Generate JSON documentation
+      #   docs = User.settings_documentation(format: :json)
+      #
+      def settings_documentation(format: :markdown, filter: nil)
+        require_relative "documentation/markdown_formatter"
+        require_relative "documentation/json_formatter"
+
+        # Get all root settings
+        settings_to_document = _settings.dup
+
+        # Apply filter if provided
+        if filter
+          settings_to_document = apply_documentation_filter(settings_to_document, filter)
+        end
+
+        # Select formatter
+        formatter_class = case format
+        when :markdown
+          Documentation::MarkdownFormatter
+        when :json
+          Documentation::JsonFormatter
+        else
+          raise ArgumentError, "Unsupported format: #{format}. Use :markdown or :json"
+        end
+
+        formatter = formatter_class.new(self, settings_to_document)
+        formatter.generate
+      end
+
       private
+
+      # Apply filter to settings list
+      def apply_documentation_filter(settings, filter)
+        case filter
+        when :active
+          settings.reject(&:deprecated?)
+        when :deprecated
+          settings.select(&:deprecated?)
+        when Proc
+          settings.select(&filter)
+        else
+          settings
+        end
+      end
 
       # Track current setting context for nested definitions
       attr_accessor :_current_setting_context

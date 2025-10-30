@@ -101,9 +101,16 @@ module ModelSettings
 
     # Get the cascade configuration
     #
-    # @return [Hash] Cascade configuration with :enable and :disable keys
+    # @return [Hash, nil] Cascade configuration with :enable and :disable keys, or nil if not configured
     def cascade
-      @options.fetch(:cascade, {enable: true, disable: true})
+      @options[:cascade]
+    end
+
+    # Get the sync configuration
+    #
+    # @return [Hash, nil] Sync configuration with :mode and :target keys
+    def sync
+      @options[:sync]
     end
 
     # Check if setting is deprecated

@@ -8,6 +8,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Flexible DSL**: Clean, declarative syntax for defining settings
 - **Authorization**: Built-in Roles (RBAC), Pundit, and ActionPolicy modules for flexible authorization
 - **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
+- **Documentation Generator**: Automatic documentation generation in Markdown/JSON formats with Rake tasks
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
 - **Dirty Tracking**: Full change tracking across all storage types
@@ -1028,6 +1029,151 @@ class UsersController < ApplicationController
 end
 ```
 
+## Documentation Generator
+
+ModelSettings can automatically generate comprehensive documentation from your settings definitions without requiring additional documentation-specific DSL options.
+
+### Generate Documentation for a Model
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :notifications_enabled,
+          type: :column,
+          description: "Enable email notifications for user activities",
+          default: true
+
+  setting :api_key,
+          type: :column,
+          description: "API key for external integrations"
+end
+
+# Generate Markdown documentation
+docs = User.settings_documentation(format: :markdown)
+File.write('docs/user_settings.md', docs)
+
+# Generate JSON documentation
+docs = User.settings_documentation(format: :json)
+File.write('docs/user_settings.json', docs)
+```
+
+### Generated Markdown Output
+
+```markdown
+# User Settings
+
+Generated: 2025-10-30 21:43:14
+
+## Settings
+
+### `notifications_enabled`
+
+Enable email notifications for user activities
+
+| Property | Value |
+|----------|-------|
+| **Type** | column |
+| **Storage** | `notifications_enabled` column |
+| **Default** | `true` |
+
+**API Methods:**
+
+\```ruby
+# Getter
+user.notifications_enabled
+
+# Setter
+user.notifications_enabled = value
+
+# Helpers (for boolean settings)
+user.notifications_enabled_enable!
+user.notifications_enabled_disable!
+user.notifications_enabled_toggle!
+user.notifications_enabled_enabled?
+user.notifications_enabled_disabled?
+\```
+```
+
+### Filter Documentation
+
+```ruby
+# Document only active (non-deprecated) settings
+docs = User.settings_documentation(format: :markdown, filter: :active)
+
+# Document only deprecated settings
+docs = User.settings_documentation(format: :markdown, filter: :deprecated)
+
+# Custom filter with proc
+docs = User.settings_documentation(
+  format: :markdown,
+  filter: ->(setting) { setting.description&.include?("API") }
+)
+```
+
+### Generate Documentation for All Models
+
+Use the Rake task to generate documentation for all models with settings:
+
+```bash
+# Generate Markdown documentation (default)
+rake settings:docs:generate
+
+# Generate JSON documentation
+rake settings:docs:generate FORMAT=json
+
+# Specify output directory
+rake settings:docs:generate OUTPUT_DIR=docs/api
+```
+
+**Output:**
+
+```
+docs/settings/
+  ├── user.md
+  ├── team.md
+  ├── organization.md
+  └── index.md  # Index of all models
+```
+
+### Documentation Includes
+
+The generated documentation automatically includes:
+
+- **Setting names and types** - All basic setting information
+- **Storage details** - Column names, JSON paths, or StoreModel configuration
+- **Default values** - Default values if specified
+- **Descriptions** - From the `description:` option
+- **Authorization rules** - From Roles, Pundit, or ActionPolicy modules
+- **Deprecation status** - Warnings for deprecated settings
+- **API methods** - All available getter/setter/helper methods
+- **Dependencies** - Cascade and sync configurations
+
+### Audit Deprecated Settings
+
+Find all deprecated settings across your application:
+
+```bash
+rake settings:audit:deprecated
+```
+
+**Output:**
+
+```
+Auditing deprecated settings...
+
+User:
+  - old_api_key: Use :api_token instead
+  - legacy_feature: Removed in v2.0
+
+Organization:
+  - billing_v1: Migrated to :billing_v2
+
+Found 3 deprecated setting(s) across 2 model(s)
+```
+
+This task exits with code 1 if deprecated settings are found, making it perfect for CI/CD pipelines.
+
 ## Dependency Management
 
 ModelSettings provides powerful dependency management through cascades and syncs, allowing settings to automatically update related settings while preventing circular dependencies.
@@ -1649,10 +1795,10 @@ end
 - [x] **Roles Module** - Role-based access control for settings with viewable_by/editable_by
 - [x] **Pundit Module** - Seamless Pundit integration with authorize_with for policy-based authorization
 - [x] **ActionPolicy Module** - ActionPolicy integration with authorize_with for rule-based authorization
+- [x] **Documentation Generator** - Automatic Markdown/JSON documentation with Rake tasks and deprecation audit
 
 ### Planned
 
-- [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
 
 ## Development
