@@ -125,7 +125,9 @@ module ModelSettings
         end
 
         # Add Rails validation to ensure only boolean values (only for non-nested settings)
-        model_class.validates setting_name, boolean_value: true unless setting.children.any?
+        # Skip validation if validate: false option is set
+        should_validate = setting.options[:validate] != false && !setting.children.any?
+        model_class.validates setting_name, boolean_value: true if should_validate
 
         # Define changed? method using column-level dirty tracking
         model_class.define_method("#{setting_name}_changed?") do

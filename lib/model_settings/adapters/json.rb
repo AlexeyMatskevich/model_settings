@@ -109,7 +109,9 @@ module ModelSettings
         # - Array-type settings (array: true option)
         is_array_setting = setting.options[:array] == true
 
-        model_class.validates setting_name, boolean_value: true unless setting.children.any? || is_array_setting
+        # Add validation unless validate: false, has children, or is array setting
+        should_validate = setting.options[:validate] != false && !setting.children.any? && !is_array_setting
+        model_class.validates setting_name, boolean_value: true if should_validate
 
         # Setup nested settings if any
         setup_nested_settings(column_name) if setting.children.any?
@@ -412,9 +414,11 @@ module ModelSettings
           # Skip validation for:
           # - Settings with nested children (parent containers)
           # - Array-type settings (array: true option)
+          # - Settings with validate: false option
           is_array_setting = child_setting.options[:array] == true
 
-          model_class.validates child_name, boolean_value: true unless child_setting.children.any? || is_array_setting
+          should_validate = child_setting.options[:validate] != false && !child_setting.children.any? && !is_array_setting
+          model_class.validates child_name, boolean_value: true if should_validate
 
           # Recursively setup nested settings for grandchildren
           if child_setting.children.any?

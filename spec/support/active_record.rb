@@ -48,9 +48,31 @@ ActiveRecord::Schema.define do
     t.text :allowed_ips_data # JSON array storage
     t.text :config_data # JSON parent storage
     t.text :sentiment_data # JSON child storage
+
+    # Additional columns for Settings Inheritance tests
+    t.boolean :notifications_enabled, default: true
+    t.string :theme, default: "light"
+    t.boolean :base_feature, default: true
+    t.boolean :child_feature, default: false
+    t.string :level_1, default: "base"
+    t.string :level_2, default: "middle"
+    t.string :level_3, default: "child"
+    t.text :config_data_2 # For StoreModel inheritance tests
+    t.boolean :api_access, default: false
     t.text :processors_data # JSON array storage
     t.text :premium_features # StoreModel storage
     t.text :ai_settings # StoreModel storage
+    t.boolean :parent_setting, default: true
+    t.boolean :child_setting, default: false
+
+    # Additional columns for edge case tests
+    t.boolean :shared_setting, default: true
+    t.boolean :feature_a, default: false
+    t.boolean :feature_b, default: false
+    t.boolean :typed_setting, default: true
+    t.boolean :child_only, default: false
+    t.boolean :middle_only, default: false
+    t.boolean :base_only, default: false
 
     t.timestamps
   end

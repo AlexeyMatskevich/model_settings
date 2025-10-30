@@ -52,6 +52,49 @@ module ModelSettings
     end
 
     class_methods do
+      # Hook called when class is inherited
+      #
+      # This is where we inherit settings from parent class.
+      #
+      # @param subclass [Class] The subclass being created
+      # @return [void]
+      def inherited(subclass)
+        super
+
+        if ModelSettings.configuration.inherit_settings && _settings.any?
+          # Copy parent settings and create adapters for subclass
+          inherited_settings = _settings.map do |parent_setting|
+            # Create a new Setting object with same configuration
+            setting_obj = Setting.new(
+              parent_setting.name,
+              parent_setting.options.dup,
+              parent: parent_setting.parent
+            )
+
+            # Recursively copy children
+            parent_setting.children.each do |child|
+              child_copy = copy_setting_recursively(child, setting_obj)
+              setting_obj.add_child(child_copy)
+            end
+
+            # Setup adapter for settings that need their own storage
+            if setting_obj.needs_own_adapter?
+              adapter = subclass.create_adapter_for(setting_obj)
+              adapter.setup!
+            end
+
+            setting_obj
+          end
+
+          # Set inherited settings on subclass
+          subclass._settings = inherited_settings
+          subclass._settings_by_name = inherited_settings.index_by(&:name)
+        else
+          # When inheritance is disabled, reset settings to empty
+          subclass._settings = []
+          subclass._settings_by_name = {}
+        end
+      end
       # Define a setting on the model
       #
       # @param name [Symbol] The name of the setting
@@ -83,20 +126,37 @@ module ModelSettings
       #           after_enable: :notify_activation
       #
       def setting(name, options = {}, &block)
-        # Create Setting object
         parent_setting = @_current_setting_context
-        setting_obj = Setting.new(name, options, parent: parent_setting)
+
+        # Check if we're overriding an inherited setting
+        existing_setting = _settings_by_name[name] if !parent_setting
+
+        if existing_setting && !parent_setting
+          # Override inherited setting: merge options
+          merged_options = Setting.merge_inherited_options(existing_setting.options, options)
+          setting_obj = Setting.new(name, merged_options, parent: existing_setting.parent)
+
+          # Replace in collections
+          index = _settings.index(existing_setting)
+          new_settings = _settings.dup
+          new_settings[index] = setting_obj
+          self._settings = new_settings
+          self._settings_by_name = _settings_by_name.merge(name => setting_obj)
+        else
+          # Create new Setting object
+          setting_obj = Setting.new(name, options, parent: parent_setting)
+
+          # Add to parent or root collection
+          if parent_setting
+            parent_setting.add_child(setting_obj)
+          else
+            self._settings = _settings + [setting_obj]
+            self._settings_by_name = _settings_by_name.merge(name => setting_obj)
+          end
+        end
 
         # Validate registered options
         ModelSettings::ModuleRegistry.validate_setting_options!(setting_obj)
-
-        # Add to parent or root collection
-        if parent_setting
-          parent_setting.add_child(setting_obj)
-        else
-          self._settings = _settings + [setting_obj]
-          self._settings_by_name = _settings_by_name.merge(name => setting_obj)
-        end
 
         # Execute definition hooks
         ModelSettings::ModuleRegistry.execute_definition_hooks(setting_obj, self)
@@ -296,6 +356,28 @@ module ModelSettings
       end
 
       private
+
+      # Recursively copy a setting and all its children
+      #
+      # @param setting [Setting] The setting to copy
+      # @param new_parent [Setting, nil] The parent for the copied setting
+      # @return [Setting] The copied setting
+      def copy_setting_recursively(setting, new_parent = nil)
+        # Create a copy of the setting
+        setting_copy = Setting.new(
+          setting.name,
+          setting.options.dup,
+          parent: new_parent
+        )
+
+        # Recursively copy children
+        setting.children.each do |child|
+          child_copy = copy_setting_recursively(child, setting_copy)
+          setting_copy.add_child(child_copy)
+        end
+
+        setting_copy
+      end
 
       # Apply filter to settings list
       def apply_documentation_filter(settings, filter)

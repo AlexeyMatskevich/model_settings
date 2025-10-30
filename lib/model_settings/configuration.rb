@@ -10,19 +10,22 @@ module ModelSettings
   #   ModelSettings.configure do |config|
   #     config.default_modules = [:pundit, :roles, :i18n]
   #     config.inherit_authorization = true
+  #     config.inherit_settings = true
   #   end
   class Configuration
-    attr_accessor :default_modules, :inherit_authorization
+    attr_accessor :default_modules, :inherit_authorization, :inherit_settings
 
     def initialize
       @default_modules = []
       @inherit_authorization = true # Security by default
+      @inherit_settings = true # Inheritance enabled by default
     end
 
     # Reset configuration to defaults
     def reset!
       @default_modules = []
       @inherit_authorization = true
+      @inherit_settings = true
     end
   end
 

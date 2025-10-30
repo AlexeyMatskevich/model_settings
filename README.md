@@ -8,6 +8,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Flexible DSL**: Clean, declarative syntax for defining settings
 - **Authorization**: Built-in Roles (RBAC), Pundit, and ActionPolicy modules for flexible authorization
 - **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
+- **Settings Inheritance**: Automatic settings inheritance across model hierarchies with override support
 - **Documentation Generator**: Automatic documentation generation in Markdown/JSON formats with Rake tasks
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
@@ -1535,6 +1536,254 @@ user.advanced_reporting  # => true (cascaded)
 user.tracking_enabled    # => false (synced)
 ```
 
+## Settings Inheritance
+
+ModelSettings supports automatic settings inheritance across model hierarchies. When enabled, child classes automatically inherit all settings from their parent classes, with full support for overriding and extending inherited settings.
+
+### Enabling Inheritance
+
+Settings inheritance is enabled by default. You can configure it globally:
+
+```ruby
+# config/initializers/model_settings.rb
+ModelSettings.configure do |config|
+  config.inherit_settings = true  # Default: true
+end
+```
+
+### Basic Inheritance
+
+Child classes automatically inherit all parent settings:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :notifications_enabled, type: :column, default: true
+  setting :api_access, type: :column, default: false
+end
+
+class PremiumUser < User
+  # Automatically inherits:
+  # - notifications_enabled
+  # - api_access
+end
+
+premium = PremiumUser.create!
+premium.notifications_enabled  # => true (inherited default)
+premium.notifications_enabled = false
+premium.save!
+```
+
+### Overriding Inherited Settings
+
+Child classes can override parent settings by redefining them:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :notifications_enabled,
+          type: :column,
+          description: "Enable notifications",
+          default: true
+
+  setting :api_access, type: :column, default: false
+end
+
+class PremiumUser < User
+  # Override with different default
+  setting :notifications_enabled, default: false
+
+  # Override with additional metadata
+  setting :api_access,
+          default: true,
+          description: "Premium API access with higher limits"
+end
+
+premium = PremiumUser.create!(notifications_enabled: false)
+premium.notifications_enabled  # => false (overridden default)
+
+# Parent class unaffected
+user = User.create!
+user.notifications_enabled  # => true (original default)
+```
+
+### Adding New Settings
+
+Child classes can add their own settings alongside inherited ones:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :base_feature, type: :column, default: true
+end
+
+class PremiumUser < User
+  # Add new settings specific to premium users
+  setting :advanced_analytics, type: :column, default: false
+  setting :priority_support, type: :column, default: true
+end
+
+premium = PremiumUser.create!
+premium.base_feature          # => true (inherited)
+premium.advanced_analytics    # => false (new)
+premium.priority_support      # => true (new)
+```
+
+### Multi-Level Inheritance
+
+Settings inheritance works across multiple levels of class hierarchies:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :level_1, type: :column, default: "base", validate: false
+end
+
+class PremiumUser < User
+  setting :level_2, type: :column, default: "premium", validate: false
+end
+
+class EnterpriseUser < PremiumUser
+  setting :level_3, type: :column, default: "enterprise", validate: false
+end
+
+enterprise = EnterpriseUser.create!
+enterprise.level_1  # => "base" (from grandparent)
+enterprise.level_2  # => "premium" (from parent)
+enterprise.level_3  # => "enterprise" (own setting)
+```
+
+### Storage Type Support
+
+Settings inheritance works with all storage types:
+
+#### Column Settings
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :enabled, type: :column, default: true
+end
+
+class PremiumUser < User
+  # Inherits column setting with full adapter support
+end
+
+premium = PremiumUser.create!(enabled: true)
+premium.enabled_disable!  # Helper methods work
+```
+
+#### JSON Settings
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :preferences,
+          type: :json,
+          storage: {column: :settings_data} do
+    setting :theme, default: "dark", validate: false
+  end
+end
+
+class PremiumUser < User
+  # Inherits JSON parent and nested settings
+end
+
+premium = PremiumUser.create!
+premium.theme = "light"
+premium.save!
+premium.reload.theme  # => "light"
+```
+
+### Disabling Inheritance
+
+To disable inheritance for specific class hierarchies:
+
+```ruby
+ModelSettings.configuration.inherit_settings = false
+
+class Parent < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :parent_setting, type: :column, default: true
+end
+
+class Child < Parent
+  # Does NOT inherit parent_setting
+  setting :child_setting, type: :column, default: false
+end
+
+Child._settings.map(&:name)  # => [:child_setting]
+```
+
+### Important Considerations
+
+1. **Adapter Creation**: Each child class gets its own adapters for inherited settings, ensuring proper method isolation.
+
+2. **Setting Metadata**: All setting metadata (descriptions, defaults, validations, cascades) is inherited and can be overridden.
+
+3. **Children Preservation**: Nested setting hierarchies (parent-child relationships) are fully preserved during inheritance.
+
+4. **Override Merging**: When overriding a setting, options are merged - you only need to specify what changes.
+
+5. **StoreModel Limitations**: StoreModel adapter with inheritance has known edge cases causing infinite recursion. This is being investigated for a future release.
+
+### Example: Complete Inheritance Hierarchy
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :notifications_enabled,
+          type: :column,
+          description: "Email notifications",
+          default: true
+
+  setting :features,
+          type: :json,
+          storage: {column: :features_data} do
+    setting :basic_analytics, default: true
+  end
+end
+
+class PremiumUser < User
+  # Override notification default
+  setting :notifications_enabled, default: false
+
+  # Add premium-specific features
+  setting :features do
+    setting :advanced_analytics, default: true
+    setting :custom_reports, default: false
+  end
+end
+
+class EnterpriseUser < PremiumUser
+  # Add enterprise features
+  setting :features do
+    setting :api_access, default: true
+    setting :white_label, default: true
+  end
+
+  # Override premium default
+  setting :custom_reports, default: true
+end
+
+# Usage
+enterprise = EnterpriseUser.create!
+enterprise.notifications_enabled  # => false (from PremiumUser)
+enterprise.basic_analytics        # => true (from User)
+enterprise.advanced_analytics     # => true (from PremiumUser)
+enterprise.custom_reports         # => true (overridden in EnterpriseUser)
+enterprise.api_access             # => true (from EnterpriseUser)
+enterprise.white_label            # => true (from EnterpriseUser)
+```
+
 ## Global Configuration
 
 Configure default behavior globally:
@@ -1796,10 +2045,11 @@ end
 - [x] **Pundit Module** - Seamless Pundit integration with authorize_with for policy-based authorization
 - [x] **ActionPolicy Module** - ActionPolicy integration with authorize_with for rule-based authorization
 - [x] **Documentation Generator** - Automatic Markdown/JSON documentation with Rake tasks and deprecation audit
+- [x] **Settings Inheritance** - Automatic settings inheritance across model hierarchies with override support
 
 ### Planned
 
-- [ ] **Settings Inheritance** - Inherit settings across model hierarchies
+No planned features at this time - the gem has achieved feature-complete status!
 
 ## Development
 

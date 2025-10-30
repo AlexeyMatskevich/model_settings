@@ -575,7 +575,7 @@ RSpec.describe ModelSettings::DependencyEngine do
     context "with JSON storage" do
       before do
         model_class.setting :prefs, type: :json, storage: {column: :preferences} do
-          setting :theme, default: false
+          setting :theme, default: false, validate: false
         end
       end
 
@@ -590,7 +590,7 @@ RSpec.describe ModelSettings::DependencyEngine do
       before do
         model_class.setting :enabled, type: :column, default: false
         model_class.setting :prefs, type: :json, storage: {column: :preferences} do
-          setting :theme, default: false
+          setting :theme, default: false, validate: false
         end
       end
 
@@ -623,7 +623,7 @@ RSpec.describe ModelSettings::DependencyEngine do
     context "when column parent has JSON child with own storage" do
       before do
         model_class.setting :premium, type: :column, default: false do
-          setting :theme, type: :json, storage: {column: :theme_data}, default: false
+          setting :theme, type: :json, storage: {column: :theme_data}, default: false, validate: false
         end
         model_class.compile_settings!
       end
@@ -807,6 +807,7 @@ RSpec.describe ModelSettings::DependencyEngine do
       let(:child_type) { :json }
       let(:child_storage) { {column: :theme_data} }
       let(:child_default) { false }
+      let(:child_extra_options) { {validate: false} }  # Avoid conflict with theme database column
 
       it_behaves_like "mixed storage contract"
     end
