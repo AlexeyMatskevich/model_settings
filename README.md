@@ -6,7 +6,7 @@ Declarative configuration management DSL for Rails models with support for multi
 
 - **Multiple Storage Backends**: Column, JSON/JSONB, and StoreModel support
 - **Flexible DSL**: Clean, declarative syntax for defining settings
-- **Authorization**: Built-in Roles Module (RBAC) and Pundit Module (policy-based authorization)
+- **Authorization**: Built-in Roles (RBAC), Pundit, and ActionPolicy modules for flexible authorization
 - **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
@@ -783,6 +783,251 @@ RSpec.describe UserPolicy do
 end
 ```
 
+### Authorization with ActionPolicy Module
+
+For applications using [ActionPolicy](https://actionpolicy.evilmartians.io/) for authorization, ModelSettings provides seamless integration through the ActionPolicy Module. This allows you to leverage your existing ActionPolicy rules to control access to settings.
+
+**Important:** Authorization modules (Roles, Pundit, ActionPolicy) are mutually exclusive. You can only use ONE authorization module at a time per model.
+
+#### Basic ActionPolicy Integration
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::ActionPolicy
+
+  # Use policy rules for authorization
+  setting :billing_override,
+          type: :column,
+          authorize_with: :manage_billing?
+
+  setting :api_access,
+          type: :column,
+          authorize_with: :admin?
+
+  setting :system_config,
+          type: :column,
+          authorize_with: :admin?
+
+  setting :display_name,
+          type: :column
+          # No authorization = unrestricted
+end
+
+# In your UserPolicy
+class UserPolicy < ApplicationPolicy
+  def manage_billing?
+    user.admin? || user.finance?
+  end
+
+  def admin?
+    user.admin?
+  end
+
+  # Helper method to get permitted settings
+  def permitted_settings
+    record.class._authorized_settings.select do |_name, method|
+      public_send(method)
+    end.keys
+  end
+end
+```
+
+#### Controller Integration with ActionPolicy
+
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize! @user
+
+    # Get settings allowed by policy
+    policy = authorized(@user)
+    allowed_settings = policy.permitted_settings
+
+    # Filter params to only include allowed settings
+    permitted_params = params.require(:user).permit(*allowed_settings)
+
+    if @user.update(permitted_params)
+      redirect_to @user
+    else
+      render :edit
+    end
+  end
+end
+```
+
+#### Querying Authorization Metadata
+
+```ruby
+# Get the policy rule for a setting
+User.authorization_for_setting(:billing_override)
+# => :manage_billing?
+
+# Get all settings requiring a specific permission
+User.settings_requiring(:admin?)
+# => [:api_access, :system_config]
+
+# Get all settings with authorization
+User.authorized_settings
+# => [:billing_override, :api_access, :system_config]
+```
+
+#### View Layer with ActionPolicy
+
+```erb
+<!-- In your views -->
+<% policy = authorized(@user) %>
+<% policy.permitted_settings.each do |setting_name| %>
+  <div class="setting">
+    <%= f.check_box setting_name %>
+    <%= f.label setting_name %>
+  </div>
+<% end %>
+
+<!-- Check specific permission -->
+<% if allowed_to?(:manage_billing?, @user) %>
+  <%= f.check_box :billing_override %>
+  <%= f.label :billing_override %>
+<% end %>
+```
+
+#### Validation Rules
+
+The ActionPolicy Module enforces strict validation:
+
+```ruby
+# ✓ Valid - Symbol pointing to policy rule
+setting :feature, authorize_with: :manage_feature?
+
+# ✗ Invalid - String not allowed
+setting :feature, authorize_with: "manage_feature?"
+# => ArgumentError: authorize_with must be a Symbol
+
+# ✗ Invalid - Array not allowed (use Roles Module for this)
+setting :feature, authorize_with: [:admin?, :finance?]
+# => ArgumentError: authorize_with must be a Symbol
+
+# ✗ Invalid - Proc not allowed
+setting :feature, authorize_with: -> { true }
+# => ArgumentError: authorize_with must be a Symbol
+```
+
+**Why only Symbols?** ActionPolicy policies are rule-based methods. For simple role arrays or custom logic, use the Roles Module instead.
+
+#### Advanced Policy Pattern
+
+```ruby
+# In your UserPolicy
+class UserPolicy < ApplicationPolicy
+  # Scope-based filtering
+  relation_scope do |relation|
+    next relation if user.admin?
+    relation.where(organization_id: user.organization_id)
+  end
+
+  # Group permissions by category
+  def billing_permissions
+    User.settings_requiring(:manage_billing?)
+  end
+
+  def admin_permissions
+    User.settings_requiring(:admin?)
+  end
+
+  # Dynamic permission checking
+  def permitted_settings_for_form
+    return [] unless can_edit_user?
+
+    permitted_settings
+  end
+
+  # Check if user can edit any settings
+  def can_edit_settings?
+    permitted_settings.any?
+  end
+
+  private
+
+  def can_edit_user?
+    user.admin? || record.id == user.id
+  end
+end
+```
+
+#### Testing with ActionPolicy
+
+```ruby
+RSpec.describe UserPolicy do
+  let(:policy) { described_class.new(user: user, record: record) }
+  let(:record) { User.new }
+
+  context "when user is admin" do
+    let(:user) { User.new(role: :admin) }
+
+    it "permits all settings" do
+      expect(policy.permitted_settings).to include(
+        :billing_override,
+        :api_access,
+        :system_config
+      )
+    end
+
+    it "allows managing billing" do
+      expect(policy.manage_billing?).to be true
+    end
+  end
+
+  context "when user is finance" do
+    let(:user) { User.new(role: :finance) }
+
+    it "permits only billing settings" do
+      expect(policy.permitted_settings).to eq([:billing_override])
+    end
+
+    it "allows managing billing" do
+      expect(policy.manage_billing?).to be true
+    end
+
+    it "denies admin access" do
+      expect(policy.admin?).to be false
+    end
+  end
+end
+```
+
+#### Integration with params_filter
+
+ActionPolicy's `params_filter` feature works seamlessly:
+
+```ruby
+class UserPolicy < ApplicationPolicy
+  # Define allowed attributes based on permissions
+  def allowed_attributes
+    base = [:display_name]  # Always allowed
+    base += permitted_settings  # Add authorized settings
+    base
+  end
+end
+
+# In controller
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize! @user
+
+    # Use params_filter with authorized settings
+    filtered_params = params_filter(
+      @user,
+      :user,
+      with: UserPolicy
+    )
+
+    @user.update(filtered_params)
+  end
+end
+```
+
 ## Dependency Management
 
 ModelSettings provides powerful dependency management through cascades and syncs, allowing settings to automatically update related settings while preventing circular dependencies.
@@ -1403,10 +1648,10 @@ end
 - [x] **Mixed Storage Types** - Column parents with JSON children and vice versa
 - [x] **Roles Module** - Role-based access control for settings with viewable_by/editable_by
 - [x] **Pundit Module** - Seamless Pundit integration with authorize_with for policy-based authorization
+- [x] **ActionPolicy Module** - ActionPolicy integration with authorize_with for rule-based authorization
 
 ### Planned
 
-- [ ] **ActionPolicy Module** - ActionPolicy integration for rule-based settings authorization
 - [ ] **Plans Module** - Subscription tier management with automatic feature gating
 - [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
@@ -1452,14 +1697,15 @@ bundle exec standardrb --fix
 
 The test suite includes:
 
-- **716 examples** with 100% passing rate
+- **736 examples** with 100% passing rate
 - Unit tests for all adapters (Column, JSON, StoreModel)
 - Integration tests for dependency engine (cascades, syncs, mixed storage)
-- Authorization tests for Roles Module (RBAC) and Pundit Module (policy-based)
+- Authorization tests for all three modules: Roles (RBAC), Pundit, and ActionPolicy
 - Validation tests for boolean type checking and authorization options
 - Edge case coverage (nil values, empty arrays, circular dependencies)
 - Shared behavior verification across all adapters
 - Module registry tests for exclusive groups and conflict detection
+- RSpec Skill compliance: aggregate_failures, proper symmetry, Pattern 1
 
 ### Development Setup
 

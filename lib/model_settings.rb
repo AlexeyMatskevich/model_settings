@@ -22,6 +22,7 @@ require_relative "model_settings/modules/i18n" if defined?(I18n)
 # Authorization modules (mutually exclusive)
 require_relative "model_settings/modules/roles"
 require_relative "model_settings/modules/pundit"
+require_relative "model_settings/modules/action_policy"
 
 module ModelSettings
   class Error < StandardError; end
@@ -30,10 +31,12 @@ module ModelSettings
   # Register authorization modules
   ModuleRegistry.register_module(:roles, Modules::Roles)
   ModuleRegistry.register_module(:pundit, Modules::Pundit)
+  ModuleRegistry.register_module(:action_policy, Modules::ActionPolicy)
 
   # Register authorization modules as mutually exclusive
   ModuleRegistry.register_exclusive_group(:authorization, :roles)
   ModuleRegistry.register_exclusive_group(:authorization, :pundit)
+  ModuleRegistry.register_exclusive_group(:authorization, :action_policy)
 
   class << self
     attr_writer :configuration
