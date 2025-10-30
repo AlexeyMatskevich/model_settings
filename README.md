@@ -1652,7 +1652,6 @@ end
 
 ### Planned
 
-- [ ] **Plans Module** - Subscription tier management with automatic feature gating
 - [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
 
