@@ -4,8 +4,9 @@ Declarative configuration management DSL for Rails models with support for multi
 
 ## Features
 
-- **Multiple Storage Backends**: Column, JSON/JSONB support
+- **Multiple Storage Backends**: Column, JSON/JSONB, and StoreModel support
 - **Flexible DSL**: Clean, declarative syntax for defining settings
+- **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
 - **Dirty Tracking**: Full change tracking across all storage types
@@ -13,6 +14,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Deprecation Tracking**: Built-in deprecation warnings and audit trails
 - **I18n Support**: Full internationalization for labels and descriptions
 - **Module System**: Extensible architecture for custom modules
+- **Mixed Storage**: Support for complex parent-child relationships across storage types
 
 ## Installation
 
@@ -317,6 +319,314 @@ user.translations_for(:notifications_enabled)
 # => {label: "...", description: "...", help: "..."}
 ```
 
+## Dependency Management
+
+ModelSettings provides powerful dependency management through cascades and syncs, allowing settings to automatically update related settings while preventing circular dependencies.
+
+### Cascades
+
+Cascades automatically propagate enable/disable actions to child settings:
+
+#### Enable Cascade
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :premium_mode, type: :column, default: false, cascade: {enable: true} do
+    setting :advanced_analytics, type: :column, default: false
+    setting :priority_support, type: :column, default: false
+    setting :custom_branding, type: :column, default: false
+  end
+end
+
+# When premium_mode is enabled, all children are automatically enabled
+user = User.create!
+user.premium_mode = true
+user.save!
+
+user.advanced_analytics  # => true (auto-enabled)
+user.priority_support    # => true (auto-enabled)
+user.custom_branding     # => true (auto-enabled)
+```
+
+#### Disable Cascade
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :account_active, type: :column, default: true, cascade: {disable: true} do
+    setting :api_access, type: :column, default: true
+    setting :email_notifications, type: :column, default: true
+    setting :data_export, type: :column, default: true
+  end
+end
+
+# When account is deactivated, all children are automatically disabled
+user = User.create!
+user.account_active = false
+user.save!
+
+user.api_access           # => false (auto-disabled)
+user.email_notifications  # => false (auto-disabled)
+user.data_export          # => false (auto-disabled)
+```
+
+#### Both Cascades
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :billing_enabled,
+          type: :column,
+          default: false,
+          cascade: {enable: true, disable: true} do
+    setting :invoices, type: :column, default: false
+    setting :payments, type: :column, default: false
+  end
+end
+
+# Enable cascade
+org = Organization.create!
+org.billing_enabled = true
+org.save!
+org.invoices  # => true
+org.payments  # => true
+
+# Disable cascade
+org.billing_enabled = false
+org.save!
+org.invoices  # => false
+org.payments  # => false
+```
+
+### Syncs
+
+Syncs keep two settings synchronized with three modes: forward, inverse, and backward:
+
+#### Forward Sync
+
+Target setting mirrors source setting:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :marketing_emails,
+          type: :column,
+          default: true,
+          sync: {target: :newsletter_subscription, mode: :forward}
+
+  setting :newsletter_subscription, type: :column, default: true
+end
+
+user = User.create!
+user.marketing_emails = false
+user.save!
+
+user.newsletter_subscription  # => false (synced)
+```
+
+#### Inverse Sync
+
+Target setting is opposite of source setting:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :do_not_track,
+          type: :column,
+          default: false,
+          sync: {target: :analytics_enabled, mode: :inverse}
+
+  setting :analytics_enabled, type: :column, default: true
+end
+
+user = User.create!
+user.do_not_track = true
+user.save!
+
+user.analytics_enabled  # => false (inverse of true)
+```
+
+#### Backward Sync
+
+Source setting is updated to match target (useful for derived settings):
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :auto_renew,
+          type: :column,
+          default: true,
+          sync: {target: :subscription_active, mode: :backward}
+
+  setting :subscription_active, type: :column, default: false
+end
+
+user = User.create!(subscription_active: true)
+user.auto_renew = false  # Try to disable
+user.save!
+
+user.auto_renew  # => true (reverted to match subscription_active)
+```
+
+#### Chained Syncs
+
+Syncs can be chained to propagate changes through multiple settings:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :gdpr_mode,
+          type: :column,
+          default: false,
+          sync: {target: :privacy_enhanced, mode: :forward}
+
+  setting :privacy_enhanced,
+          type: :column,
+          default: false,
+          sync: {target: :tracking_disabled, mode: :forward}
+
+  setting :tracking_disabled, type: :column, default: false
+end
+
+user = User.create!
+user.gdpr_mode = true
+user.save!
+
+user.privacy_enhanced    # => true (synced from gdpr_mode)
+user.tracking_disabled   # => true (synced from privacy_enhanced)
+```
+
+### Cycle Detection
+
+The DependencyEngine automatically detects circular sync dependencies at definition time:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :feature_a, sync: {target: :feature_b, mode: :forward}
+  setting :feature_b, sync: {target: :feature_c, mode: :forward}
+  setting :feature_c, sync: {target: :feature_a, mode: :forward}  # Cycle!
+end
+
+# Raises at boot time:
+# ModelSettings::CyclicSyncError: Cyclic sync detected: feature_a -> feature_b -> feature_c -> feature_a
+# Settings cannot have circular sync dependencies.
+```
+
+This prevents infinite loops and ensures predictable behavior.
+
+### Mixed Storage Types
+
+Settings can have parent-child relationships across different storage backends:
+
+#### Column Parent with JSON Children
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  # Column parent with JSON children using explicit storage
+  setting :premium, type: :column, default: false, cascade: {enable: true} do
+    setting :theme,
+            type: :json,
+            storage: {column: :premium_features},
+            default: "light"
+
+    setting :advanced_filters,
+            type: :json,
+            storage: {column: :premium_features},
+            default: false
+  end
+end
+
+# Migration:
+# add_column :users, :premium, :boolean, default: false
+# add_column :users, :premium_features, :jsonb, default: {}
+
+user = User.create!
+user.premium = true
+user.save!
+
+user.advanced_filters  # => true (cascaded from column parent)
+user.theme            # => "light" (stored in JSON column)
+```
+
+#### JSON Parent with Column Children
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :notifications,
+          type: :json,
+          storage: {column: :settings},
+          default: true do
+    # Child uses its own column even though parent is JSON
+    setting :email_enabled, type: :column, default: false
+    setting :sms_enabled, type: :column, default: false
+  end
+end
+
+# Migration:
+# add_column :users, :settings, :jsonb, default: {}
+# add_column :users, :email_enabled, :boolean, default: false
+# add_column :users, :sms_enabled, :boolean, default: false
+
+user = User.create!
+user.notifications = false
+user.email_enabled = true
+
+user.save!
+
+# Each setting uses its own storage
+user.settings          # => {"notifications" => false}
+user.email_enabled     # => true (separate column)
+```
+
+### Combining Cascades and Syncs
+
+Cascades and syncs work together seamlessly:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  # Parent with cascade
+  setting :enterprise_mode,
+          type: :column,
+          default: false,
+          cascade: {enable: true} do
+    setting :advanced_reporting, type: :column, default: false
+  end
+
+  # Independent sync
+  setting :analytics_enabled,
+          type: :column,
+          default: true,
+          sync: {target: :tracking_enabled, mode: :forward}
+
+  setting :tracking_enabled, type: :column, default: true
+end
+
+user = User.create!
+user.enterprise_mode = true
+user.analytics_enabled = false
+user.save!
+
+# Both cascade and sync applied in same save
+user.advanced_reporting  # => true (cascaded)
+user.tracking_enabled    # => false (synced)
+```
+
 ## Global Configuration
 
 Configure default behavior globally:
@@ -419,8 +729,62 @@ User.all_settings_recursive # => All settings including nested
 
 - **Column storage**: Best for frequently queried boolean flags
 - **JSON storage**: Best for related settings that are read/written together
+- **Mixed storage**: Use when you need column parent with JSON children or vice versa
 
-### 2. Use Metadata for Organization
+### 2. Use Cascades for Hierarchical Features
+
+Cascades are perfect for parent-child feature relationships:
+
+```ruby
+# Good - Feature hierarchy with cascade
+setting :premium_plan, cascade: {enable: true} do
+  setting :advanced_analytics
+  setting :priority_support
+  setting :custom_branding
+end
+
+# When premium is enabled, all premium features are automatically enabled
+```
+
+### 3. Use Syncs for Related Settings
+
+Syncs keep related settings in sync automatically:
+
+```ruby
+# Good - Marketing consent syncs with newsletter
+setting :marketing_consent,
+        sync: {target: :newsletter_subscription, mode: :forward}
+
+# Less ideal - Manual synchronization
+after_save :sync_newsletter
+def sync_newsletter
+  self.newsletter_subscription = marketing_consent  # Easy to miss edge cases
+end
+```
+
+### 4. Choose the Right Sync Mode
+
+- **Forward** (target = source): For mirroring settings
+- **Inverse** (target = !source): For opt-out/opt-in relationships
+- **Backward** (source = target): For computed/derived settings
+
+### 5. Avoid Circular Dependencies
+
+The system will catch cycles at boot time, but design carefully:
+
+```ruby
+# Bad - Circular dependency
+setting :feature_a, sync: {target: :feature_b, mode: :forward}
+setting :feature_b, sync: {target: :feature_a, mode: :forward}
+# Raises CyclicSyncError at boot!
+
+# Good - Linear dependency chain
+setting :feature_a, sync: {target: :feature_b, mode: :forward}
+setting :feature_b, sync: {target: :feature_c, mode: :forward}
+setting :feature_c  # End of chain
+```
+
+### 6. Use Metadata for Organization
 
 ```ruby
 setting :feature_name,
@@ -431,7 +795,7 @@ setting :feature_name,
         }
 ```
 
-### 3. Add Descriptions
+### 7. Add Descriptions
 
 ```ruby
 setting :api_access,
@@ -439,7 +803,7 @@ setting :api_access,
         default: false
 ```
 
-### 4. Use Callbacks for Side Effects
+### 8. Use Callbacks for Side Effects
 
 Instead of manually triggering side effects, use callbacks:
 
@@ -454,7 +818,7 @@ user.save!
 user.setup_premium_features # Easy to forget!
 ```
 
-### 5. Deprecate Gracefully
+### 9. Deprecate Gracefully
 
 When replacing settings, use deprecation:
 
@@ -462,6 +826,20 @@ When replacing settings, use deprecation:
 setting :old_setting,
         deprecated: "Use new_setting instead",
         metadata: {deprecated_since: "2.0.0", replacement: :new_setting}
+```
+
+### 10. Combine Cascades with Syncs
+
+Cascades and syncs work together for complex workflows:
+
+```ruby
+# Enterprise plan enables features AND syncs with billing
+setting :enterprise_plan,
+        cascade: {enable: true},
+        sync: {target: :billing_enabled, mode: :forward} do
+  setting :advanced_reporting
+  setting :sso_integration
+end
 ```
 
 ## Testing
@@ -501,13 +879,21 @@ end
 
 ## Roadmap
 
-- [ ] StoreModel adapter for complex nested settings
-- [ ] Pundit/ActionPolicy integration for authorization
-- [ ] Plans module for subscription tier management
-- [ ] Roles module for role-based access control
-- [ ] Sync mechanism with cycle detection
-- [ ] Documentation generator rake tasks
-- [ ] Settings inheritance across models
+### Completed ✅
+
+- [x] **StoreModel adapter** - Full support for complex nested settings with StoreModel
+- [x] **Dependency Engine** - Cascades, syncs (forward/inverse/backward), and cycle detection
+- [x] **Mixed Storage Types** - Column parents with JSON children and vice versa
+
+### Planned
+
+- [ ] **Authorization Integration** - Pundit/ActionPolicy support for permission-based settings
+- [ ] **Plans Module** - Subscription tier management with automatic feature gating
+- [ ] **Roles Module** - Role-based access control for settings
+- [ ] **Documentation Generator** - Rake tasks to generate settings documentation
+- [ ] **Settings Inheritance** - Inherit settings across model hierarchies
+- [ ] **GraphQL Support** - Auto-generated GraphQL types and resolvers for settings
+- [ ] **Admin UI** - Web interface for managing settings
 
 ## Contributing
 
