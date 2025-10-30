@@ -89,6 +89,73 @@ user.billing_enabled_enable!
 user.api_access_toggle!
 ```
 
+### JSON Arrays
+
+Store array values in JSON columns:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :allowed_ips,
+          type: :json,
+          storage: {column: :security_settings},
+          array: true,
+          default: []
+
+  setting :tags,
+          type: :json,
+          storage: {column: :metadata},
+          array: true
+end
+
+# Usage
+user = User.create!
+user.allowed_ips = ["192.168.1.1", "10.0.0.1"]
+user.tags = ["premium", "verified"]
+user.save!
+
+# Array operations
+user.allowed_ips << "172.16.0.1"
+user.allowed_ips_changed? # => true
+```
+
+### StoreModel Storage
+
+Use StoreModel for complex nested settings with type casting and validation:
+
+```ruby
+# Define StoreModel class
+class AiSettings
+  include StoreModel::Model
+
+  attribute :transcription, :boolean, default: false
+  attribute :sentiment, :boolean, default: false
+  attribute :rate_limit, :integer, default: 100
+end
+
+class Callcenter < ApplicationRecord
+  include ModelSettings::DSL
+
+  # Register StoreModel attribute
+  attribute :ai_settings, AiSettings.to_type
+
+  setting :transcription,
+          type: :store_model,
+          storage: {column: :ai_settings}
+
+  setting :sentiment,
+          type: :store_model,
+          storage: {column: :ai_settings}
+end
+
+# Usage
+callcenter = Callcenter.create!(ai_settings: AiSettings.new)
+callcenter.transcription = true
+callcenter.transcription_changed? # => true (via StoreModel)
+callcenter.save!
+```
+
 ### Migration Example
 
 ```ruby
@@ -98,9 +165,17 @@ class AddSettingsToUsers < ActiveRecord::Migration[7.0]
     add_column :users, :notifications_enabled, :boolean, default: false, null: false
     add_column :users, :premium_mode, :boolean, default: false, null: false
 
-    # For JSON storage
+    # For JSON hash storage
     add_column :users, :settings, :jsonb, default: {}, null: false
     add_index :users, :settings, using: :gin
+
+    # For JSON array storage
+    add_column :users, :security_settings, :jsonb, default: {}, null: false
+    add_column :users, :metadata, :jsonb, default: {}, null: false
+
+    # For StoreModel storage
+    add_column :users, :ai_settings, :jsonb, default: {}, null: false
+    add_column :users, :premium_features, :jsonb, default: {}, null: false
   end
 end
 ```
@@ -590,6 +665,59 @@ user.save!
 # Each setting uses its own storage
 user.settings          # => {"notifications" => false}
 user.email_enabled     # => true (separate column)
+```
+
+#### Column Parent with StoreModel Children
+
+```ruby
+# Define StoreModel class
+class PremiumFeatures
+  include StoreModel::Model
+
+  attribute :advanced_analytics, :boolean, default: false
+  attribute :priority_support, :boolean, default: false
+  attribute :custom_branding, :boolean, default: false
+end
+
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  # Register StoreModel attribute
+  attribute :premium_features, PremiumFeatures.to_type
+
+  # Column parent with StoreModel children
+  setting :premium,
+          type: :column,
+          default: false,
+          cascade: {enable: true} do
+    setting :advanced_analytics,
+            type: :store_model,
+            storage: {column: :premium_features}
+
+    setting :priority_support,
+            type: :store_model,
+            storage: {column: :premium_features}
+
+    setting :custom_branding,
+            type: :store_model,
+            storage: {column: :premium_features}
+  end
+end
+
+# Migration:
+# add_column :users, :premium, :boolean, default: false
+# add_column :users, :premium_features, :jsonb, default: {}
+
+user = User.create!(premium_features: PremiumFeatures.new)
+user.premium = true
+user.save!
+
+# Cascade works across storage types
+user.advanced_analytics  # => true (auto-enabled by cascade)
+user.priority_support    # => true (auto-enabled by cascade)
+
+# StoreModel benefits: type casting and validation
+user.premium_features    # => #<PremiumFeatures advanced_analytics=true...>
 ```
 
 ### Combining Cascades and Syncs
