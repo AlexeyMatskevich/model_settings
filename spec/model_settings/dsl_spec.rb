@@ -3,41 +3,36 @@
 require "spec_helper"
 
 RSpec.describe ModelSettings::DSL do
-  # Create a minimal base class that provides class_attribute
-  # (similar to what ActiveRecord::Base provides)
-  let(:base_class) do
-    Class.new do
-      def self.class_attribute(*attrs, **options)
-        attrs.each do |attr|
-          default = options[:default]
-
-          # Class-level accessor
-          define_singleton_method(attr) do
-            instance_variable_get("@#{attr}") || default
-          end
-
-          define_singleton_method("#{attr}=") do |value|
-            instance_variable_set("@#{attr}", value)
-          end
-
-          # Ensure subclasses get their own copy
-          define_singleton_method(:inherited) do |subclass|
-            super(subclass) if defined?(super)
-            subclass.send("#{attr}=", send(attr))
-          end
-        end
-      end
-    end
-  end
-
   # Create a test class that includes the DSL
   let(:test_class) do
-    Class.new(base_class) do
+    Class.new(ActiveRecord::Base) do
+      self.table_name = "test_models"
+
       def self.name
         "TestModel"
       end
 
       include ModelSettings::DSL
+    end
+  end
+
+  describe "ActiveRecord requirement" do
+    context "when included in non-ActiveRecord class" do
+      let(:plain_class) { Class.new }
+
+      it "raises error" do
+        expect {
+          plain_class.include(described_class)
+        }.to raise_error(ModelSettings::Error, /can only be included in ActiveRecord models/)
+      end
+    end
+
+    context "when included in ActiveRecord model" do
+      let(:ar_class) { test_class }
+
+      it "includes successfully" do
+        expect { ar_class }.not_to raise_error
+      end
     end
   end
 
@@ -48,19 +43,10 @@ RSpec.describe ModelSettings::DSL do
 
       let(:setting) { test_class.find_setting(:enabled) }
 
-      it "creates a Setting object" do
+      it "creates and stores Setting object", :aggregate_failures do
         expect(setting).to be_a(ModelSettings::Setting)
-      end
-
-      it "stores the setting name" do
         expect(setting.name).to eq(:enabled)
-      end
-
-      it "adds setting to settings collection" do
         expect(test_class.settings).to include(setting)
-      end
-
-      it "makes setting findable" do
         expect(test_class.settings.first.name).to eq(:enabled)
       end
     end
@@ -101,19 +87,10 @@ RSpec.describe ModelSettings::DSL do
         let(:parent) { test_class.find_setting(:features) }
         let(:child) { parent.find_child(:ai_enabled) }
 
-        it "creates parent setting" do
+        it "creates hierarchical structure", :aggregate_failures do
           expect(parent).to be_a(ModelSettings::Setting)
-        end
-
-        it "creates child settings" do
           expect(parent.children.size).to eq(2)
-        end
-
-        it "establishes parent reference" do
           expect(child.parent).to eq(parent)
-        end
-
-        it "establishes children collection" do
           expect(parent.children).to include(child)
         end
       end
@@ -279,18 +256,13 @@ RSpec.describe ModelSettings::DSL do
 
     let(:roots) { test_class.root_settings }
 
-    it "returns only root-level settings" do
+    it "returns only root-level settings", :aggregate_failures do
       expect(roots.size).to eq(3)
-    end
-
-    it "includes all root names" do
       expect(roots.map(&:name)).to match_array([:root1, :root2, :root3])
-    end
-
-    it "does NOT include nested settings" do
       expect(roots.map(&:name)).not_to include(:child1, :child2)
     end
   end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
   # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe ".leaf_settings" do
@@ -306,11 +278,8 @@ RSpec.describe ModelSettings::DSL do
 
     let(:leaves) { test_class.leaf_settings }
 
-    it "returns only leaf settings" do
+    it "returns only leaf settings", :aggregate_failures do
       expect(leaves.map(&:name)).to match_array([:standalone, :child1, :grandchild])
-    end
-
-    it "does NOT include parent settings" do
       expect(leaves.map(&:name)).not_to include(:parent, :child2)
     end
   end
@@ -330,39 +299,32 @@ RSpec.describe ModelSettings::DSL do
 
     let(:all_settings) { test_class.all_settings_recursive }
 
-    it "returns all settings including nested" do
+    it "returns all settings including nested", :aggregate_failures do
       expect(all_settings.size).to eq(5)
-    end
-
-    it "includes all setting names" do
       expect(all_settings.map(&:name)).to match_array([:root1, :root2, :child1, :child2, :grandchild])
-    end
-
-    it "includes parent settings" do
       expect(all_settings.map(&:name)).to include(:root2, :child2)
-    end
-
-    it "includes leaf settings" do
       expect(all_settings.map(&:name)).to include(:root1, :child1, :grandchild)
     end
   end
   # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "class isolation" do
     let(:test_class_a) do
-      Class.new(base_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
+
         def self.name
           "TestModelA"
         end
-        # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
         include ModelSettings::DSL
       end
     end
 
     let(:test_class_b) do
-      Class.new(base_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
+
         def self.name
           "TestModelB"
         end
@@ -376,28 +338,24 @@ RSpec.describe ModelSettings::DSL do
       test_class_b.setting :setting_b
     end
 
-    it "keeps class A settings separate" do
-      expect(test_class_a.settings.map(&:name)).to eq([:setting_a])
+    context "when checking class A" do
+      let(:klass) { test_class_a }
+
+      it "isolates settings from other classes", :aggregate_failures do
+        expect(klass.settings.map(&:name)).to eq([:setting_a])
+        expect(klass.find_setting(:setting_a)).not_to be_nil
+        expect(klass.find_setting(:setting_b)).to be_nil
+      end
     end
 
-    it "keeps class B settings separate" do
-      expect(test_class_b.settings.map(&:name)).to eq([:setting_b])
-    end
+    context "when checking class B" do
+      let(:klass) { test_class_b }
 
-    it "allows class A to find its own setting" do
-      expect(test_class_a.find_setting(:setting_a)).not_to be_nil
-    end
-
-    it "prevents class A from finding class B setting" do
-      expect(test_class_a.find_setting(:setting_b)).to be_nil
-    end
-
-    it "allows class B to find its own setting" do
-      expect(test_class_b.find_setting(:setting_b)).not_to be_nil
-    end
-
-    it "prevents class B from finding class A setting" do
-      expect(test_class_b.find_setting(:setting_a)).to be_nil
+      it "isolates settings from other classes", :aggregate_failures do
+        expect(klass.settings.map(&:name)).to eq([:setting_b])
+        expect(klass.find_setting(:setting_b)).not_to be_nil
+        expect(klass.find_setting(:setting_a)).to be_nil
+      end
     end
   end
 end

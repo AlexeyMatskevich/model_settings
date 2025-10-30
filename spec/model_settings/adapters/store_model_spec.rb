@@ -5,13 +5,7 @@ require "store_model"
 
 RSpec.describe ModelSettings::Adapters::StoreModel do
   before do
-    # Create test model with JSONB column
-    ActiveRecord::Schema.define do
-      create_table :store_model_test_models, force: true do |t|
-        t.text :ai_settings
-        t.text :notification_settings
-      end
-    end
+    # Table already exists from active_record.rb
 
     # Define StoreModel classes
     stub_const("AiSettings", Class.new do
@@ -50,35 +44,14 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
 
       let(:instance) { StoreModelTestModel.new(ai_settings: AiSettings.new) }
 
-      it "creates enable! helper method" do
+      it "creates all helper methods", :aggregate_failures do
         expect(instance).to respond_to(:transcription_enable!)
-      end
-
-      it "creates disable! helper method" do
         expect(instance).to respond_to(:transcription_disable!)
-      end
-
-      it "creates toggle! helper method" do
         expect(instance).to respond_to(:transcription_toggle!)
-      end
-
-      it "creates enabled? helper method" do
         expect(instance).to respond_to(:transcription_enabled?)
-      end
-
-      it "creates disabled? helper method" do
         expect(instance).to respond_to(:transcription_disabled?)
-      end
-
-      it "creates changed? helper method" do
         expect(instance).to respond_to(:transcription_changed?)
-      end
-
-      it "creates _was helper method" do
         expect(instance).to respond_to(:transcription_was)
-      end
-
-      it "creates _change helper method" do
         expect(instance).to respond_to(:transcription_change)
       end
     end
@@ -177,19 +150,19 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
 
     describe "#setting_name_toggle!" do
-      context "when setting is false" do
+      context "when setting is disabled" do
         before { instance.update!(email_enabled: false) }
 
-        it "changes to true" do
+        it "enables the setting" do
           instance.email_enabled_toggle!
           expect(instance.email_enabled).to be true
         end
       end
 
-      context "when setting is true" do
+      context "when setting is enabled" do
         before { instance.update!(email_enabled: true) }
 
-        it "changes to false" do
+        it "disables the setting" do
           instance.email_enabled_toggle!
           expect(instance.email_enabled).to be false
         end
@@ -348,13 +321,13 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when value has NOT changed" do
-      let(:changed) { false }
-
       it "returns false" do
-        expect(adapter.changed?(instance)).to be changed
+        expect(adapter.changed?(instance)).to be false
       end
     end
+    # rubocop:enable RSpecGuide/ContextSetup
 
     context "when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
@@ -385,13 +358,13 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when value has NOT changed" do
-      let(:expected_value) { false }
-
       it "returns current value" do
-        expect(adapter.was(instance)).to be expected_value
+        expect(adapter.was(instance)).to be false
       end
     end
+    # rubocop:enable RSpecGuide/ContextSetup
 
     context "when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
@@ -422,13 +395,13 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when value has NOT changed" do
-      let(:expected_change) { nil }
-
       it "returns nil" do
-        expect(adapter.change(instance)).to be expected_change
+        expect(adapter.change(instance)).to be_nil
       end
     end
+    # rubocop:enable RSpecGuide/ContextSetup
 
     context "when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
@@ -439,7 +412,6 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "integration with StoreModel dirty tracking" do
     before do
       StoreModelTestModel.setting :transcription,
@@ -454,9 +426,10 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       StoreModelTestModel.create!(ai_settings: AiSettings.new)
     end
 
-    describe "change tracking" do
+    context "when single setting changes" do
+      before { instance.transcription = true }
+
       it "marks setting as changed" do
-        instance.transcription = true
         expect(instance.transcription_changed?).to be true
       end
 
@@ -466,28 +439,26 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
         expect(instance.transcription_was).to be true
       end
 
-      it "tracks change array" do
+      it "returns change array" do
         instance.update!(transcription: false)
         instance.transcription = true
         expect(instance.transcription_change).to eq([false, true])
       end
-    end
 
-    describe "persistence" do
-      it "persists changes to database" do
-        instance.transcription = true
-        instance.save!
-        expect(instance.reload.transcription).to be true
-      end
+      context "and saved" do
+        before { instance.save! }
 
-      it "clears changes after save" do
-        instance.transcription = true
-        instance.save!
-        expect(instance.transcription_changed?).to be false
+        it "persists to database" do
+          expect(instance.reload.transcription).to be true
+        end
+
+        it "clears changed flag" do
+          expect(instance.transcription_changed?).to be false
+        end
       end
     end
 
-    describe "multiple settings" do
+    context "when multiple settings change" do
       before do
         instance.transcription = true
         instance.sentiment = true
@@ -501,12 +472,11 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
         expect(instance.sentiment_changed?).to be true
       end
 
-      it "includes both settings in ai_settings changes" do
+      it "tracks parent column as changed" do
         expect(instance.ai_settings_changed?).to be true
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
   describe "default values" do
     before do
@@ -522,16 +492,11 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       let(:instance) do
         model = StoreModelTestModel.new(ai_settings: AiSettings.new)
         model.transcription = false
-        model.rate_limit = 0
         model
       end
 
       it "returns the falsy value for boolean" do
         expect(instance.transcription).to be false
-      end
-
-      it "returns the falsy value for numeric" do
-        expect(instance.rate_limit).to eq(0)
       end
     end
 
@@ -540,10 +505,6 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
 
       it "returns default for boolean setting" do
         expect(instance.transcription).to be false
-      end
-
-      it "returns default for numeric setting" do
-        expect(instance.rate_limit).to eq(100)
       end
     end
 
@@ -555,4 +516,101 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       end
     end
   end
+
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  describe "boolean validation" do
+    before do
+      # Table already exists from active_record.rb
+      klass = Class.new(ActiveRecord::Base) do
+        include ModelSettings::DSL
+
+        attribute :ai_settings, AiSettings.to_type
+
+        setting :transcription,
+          type: :store_model,
+          storage: {column: :ai_settings}
+
+        compile_settings!
+      end
+
+      stub_const("StoreModelTestModel", klass)
+    end
+
+    let(:instance) { StoreModelTestModel.new(ai_settings: AiSettings.new) }
+    let(:adapter) { described_class.new(StoreModelTestModel, StoreModelTestModel.find_setting(:transcription)) }
+
+    # Characteristic: Value type
+    it "accepts true", :aggregate_failures do
+      expect { instance.transcription = true }.not_to raise_error
+      expect(instance.transcription).to be true
+    end
+
+    it "accepts false", :aggregate_failures do
+      expect { instance.transcription = false }.not_to raise_error
+      expect(instance.transcription).to be false
+    end
+
+    it "accepts nil", :aggregate_failures do
+      instance.transcription = nil
+      expect(instance).to be_valid
+      expect(instance.transcription).to be_nil
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but with NOT valid boolean" do
+      context "with string value" do
+        before { instance.transcription = "enabled" }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+      end
+
+      context "with integer value" do
+        before { instance.transcription = 1 }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+      end
+
+      context "with hash value" do
+        before { instance.transcription = {enabled: true} }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+      end
+    end
+    # rubocop:enable RSpecGuide/ContextSetup
+
+    # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+    describe "adapter write validation" do
+      it "accepts true value", :aggregate_failures do
+        expect { adapter.write(instance, true) }.not_to raise_error
+        expect(instance.transcription).to be true
+      end
+
+      it "accepts false value", :aggregate_failures do
+        expect { adapter.write(instance, false) }.not_to raise_error
+        expect(instance.transcription).to be false
+      end
+
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but with NOT valid values" do
+        it "rejects string value" do
+          adapter.write(instance, "value")
+          expect(instance).not_to be_valid
+        end
+
+        it "rejects array value" do
+          adapter.write(instance, [])
+          expect(instance).not_to be_valid
+        end
+      end
+      # rubocop:enable RSpecGuide/ContextSetup
+    end
+    # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 end

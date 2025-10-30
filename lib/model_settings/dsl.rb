@@ -16,6 +16,13 @@ module ModelSettings
     extend ActiveSupport::Concern
 
     included do
+      # Ensure ModelSettings is only used with ActiveRecord models
+      unless ancestors.include?(ActiveRecord::Base)
+        raise ModelSettings::Error,
+          "ModelSettings can only be included in ActiveRecord models. " \
+          "#{name || "Anonymous class"} does not inherit from ActiveRecord::Base."
+      end
+
       # Include core modules
       include ModelSettings::Callbacks
       include ModelSettings::Validation

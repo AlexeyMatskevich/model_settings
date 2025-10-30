@@ -9,20 +9,13 @@ RSpec.describe ModelSettings::Setting do
     context "with minimal options" do
       let(:options) { {} }
 
-      it "creates a setting with given name" do
-        expect(setting.name).to eq(:feature_flag)
-      end
-
-      it "has no parent" do
-        expect(setting.parent).to be_nil
-      end
-
-      it "has no children" do
+      it "creates setting with defaults", :aggregate_failures do
+        expect(setting).to have_attributes(
+          name: :feature_flag,
+          parent: nil,
+          type: :column
+        )
         expect(setting.children).to be_empty
-      end
-
-      it "defaults to column type" do
-        expect(setting.type).to eq(:column)
       end
     end
 
@@ -36,20 +29,13 @@ RSpec.describe ModelSettings::Setting do
         }
       end
 
-      it "stores type" do
-        expect(setting.type).to eq(:json)
-      end
-
-      it "stores storage configuration" do
-        expect(setting.storage).to eq({column: :features})
-      end
-
-      it "stores default value" do
-        expect(setting.default).to be false
-      end
-
-      it "stores description" do
-        expect(setting.description).to eq("Feature flag for new UI")
+      it "stores all provided options" do
+        expect(setting).to have_attributes(
+          type: :json,
+          storage: {column: :features},
+          default: false,
+          description: "Feature flag for new UI"
+        )
       end
     end
 
@@ -73,23 +59,16 @@ RSpec.describe ModelSettings::Setting do
     let(:parent) { described_class.new(:parent, {}) }
     let(:child) { described_class.new(:child, {}, parent: parent) }
 
-    it "adds child to children collection" do
-      add_action
-      expect(parent.children).to include(child)
-    end
-
-    it "returns the child" do
+    it "adds child to collection and returns it", :aggregate_failures do
       expect(add_action).to eq(child)
+      expect(parent.children).to include(child)
     end
 
     context "but child is already in collection" do
       before { parent.add_child(child) }
 
-      it "does NOT add duplicate" do
+      it "does NOT add duplicate but still returns the child", :aggregate_failures do
         expect { add_action }.not_to change { parent.children.count }
-      end
-
-      it "still returns the child" do
         expect(add_action).to eq(child)
       end
     end
@@ -332,27 +311,29 @@ RSpec.describe ModelSettings::Setting do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "#leaf?" do
     subject(:is_leaf) { setting.leaf? }
 
     let(:setting) { described_class.new(:parent, {}) }
 
-    it "returns true" do
-      expect(is_leaf).to be true
-    end
+    before { setting.add_child(child) if child }
 
-    context "but setting has children" do
+    context "when setting has children" do
       let(:child) { described_class.new(:child, {}, parent: setting) }
-
-      before { setting.add_child(child) }
 
       it "returns false" do
         expect(is_leaf).to be false
       end
     end
+
+    context "when setting has no children" do
+      let(:child) { nil }
+
+      it "returns true" do
+        expect(is_leaf).to be true
+      end
+    end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
   describe "#find_child" do
     subject(:found_child) { parent.find_child(child_name) }
@@ -400,15 +381,11 @@ RSpec.describe ModelSettings::Setting do
 
     let(:setting) { described_class.new(:root, {}) }
 
-    context "when setting has no children" do
-      let(:no_children) {}
-
-      it "returns empty array" do
-        expect(descendants).to be_empty
-      end
+    it "returns empty array when no children" do
+      expect(descendants).to be_empty
     end
 
-    context "when setting has direct children only" do
+    context "but when setting has direct children only" do
       let(:child1) { described_class.new(:child1, {}, parent: setting) }
       let(:child2) { described_class.new(:child2, {}, parent: setting) }
 
@@ -422,7 +399,7 @@ RSpec.describe ModelSettings::Setting do
       end
     end
 
-    context "when setting has nested children" do
+    context "but when setting has nested children" do
       let(:child) { described_class.new(:child, {}, parent: setting) }
       let(:grandchild) { described_class.new(:grandchild, {}, parent: child) }
 
@@ -550,11 +527,8 @@ RSpec.describe ModelSettings::Setting do
       let(:options) { {} }
       let(:default_value) { "default" }
 
-      it "returns nil without default" do
+      it "returns nil or default value", :aggregate_failures do
         expect(setting.get_option(:custom_option)).to be_nil
-      end
-
-      it "returns default value with default" do
         expect(setting.get_option(:custom_option, default_value)).to eq("default")
       end
     end
@@ -601,11 +575,8 @@ RSpec.describe ModelSettings::Setting do
     context "when child overrides simple option" do
       let(:child_options) { {default: true} }
 
-      it "uses child value" do
+      it "uses child value and keeps parent values", :aggregate_failures do
         expect(merged[:default]).to be true
-      end
-
-      it "keeps parent value for non-overridden options" do
         expect(merged[:type]).to eq(:json)
       end
     end

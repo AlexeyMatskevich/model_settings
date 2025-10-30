@@ -21,23 +21,11 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     context "when setting is defined" do
       let(:instance) { model_class.new }
 
-      it "creates enable! helper method" do
+      it "creates all helper methods", :aggregate_failures do
         expect(instance).to respond_to(:enabled_enable!)
-      end
-
-      it "creates disable! helper method" do
         expect(instance).to respond_to(:enabled_disable!)
-      end
-
-      it "creates toggle! helper method" do
         expect(instance).to respond_to(:enabled_toggle!)
-      end
-
-      it "creates enabled? helper method" do
         expect(instance).to respond_to(:enabled_enabled?)
-      end
-
-      it "creates disabled? helper method" do
         expect(instance).to respond_to(:enabled_disabled?)
       end
     end
@@ -127,19 +115,19 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     describe "#setting_name_toggle!" do
       subject(:toggle_action) { instance.enabled_toggle! }
 
-      context "when setting is false" do
+      context "when setting is disabled" do
         before { instance.update!(enabled: false) }
 
-        it "changes to true" do
+        it "enables the setting" do
           toggle_action
           expect(instance.enabled).to be true
         end
       end
 
-      context "when setting is true" do
+      context "when setting is enabled" do
         before { instance.update!(enabled: true) }
 
-        it "changes to false" do
+        it "disables the setting" do
           toggle_action
           expect(instance.enabled).to be false
         end
@@ -314,11 +302,10 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     # rubocop:enable RSpecGuide/ContextSetup
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe "integration with ActiveRecord dirty tracking" do
     let(:instance) { model_class.create!(enabled: false, premium_mode: false) }
 
-    describe "change tracking" do
+    context "when single setting changes" do
       before { instance.enabled = true }
 
       it "marks setting as changed" do
@@ -329,43 +316,146 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
         expect(instance.enabled_was).to be false
       end
 
-      it "tracks change array" do
+      it "returns change array" do
         expect(instance.enabled_change).to eq([false, true])
       end
-    end
 
-    describe "persistence" do
-      before do
-        instance.enabled = true
-        instance.save!
-      end
+      context "and saved" do
+        before { instance.save! }
 
-      it "persists changes to database" do
-        reloaded = model_class.find(instance.id)
-        expect(reloaded.enabled).to be true
-      end
+        it "persists to database" do
+          reloaded = model_class.find(instance.id)
+          expect(reloaded.enabled).to be true
+        end
 
-      it "clears changes after save" do
-        expect(instance.enabled_changed?).to be false
+        it "clears changed flag" do
+          expect(instance.enabled_changed?).to be false
+        end
       end
     end
 
-    describe "multiple settings" do
+    context "when multiple settings change" do
       before do
         instance.enabled = true
         instance.premium_mode = true
       end
 
-      it "tracks enabled setting as changed" do
-        expect(instance.enabled_changed?).to be true
-      end
-
-      it "tracks premium_mode setting as changed" do
-        expect(instance.premium_mode_changed?).to be true
-      end
-
-      it "includes both settings in changed list" do
+      it "tracks all changed settings" do
         expect(instance.changed).to match_array(["enabled", "premium_mode"])
+      end
+    end
+  end
+
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  describe "boolean validation" do
+    let(:instance) { model_class.new }
+    let(:adapter) { described_class.new(model_class, model_class.find_setting(:enabled)) }
+
+    # Characteristic 1: Value type
+    it "accepts true", :aggregate_failures do
+      adapter.write(instance, true)
+      expect(instance).to be_valid
+      expect(instance.enabled).to be true
+    end
+
+    it "accepts false", :aggregate_failures do
+      adapter.write(instance, false)
+      expect(instance).to be_valid
+      expect(instance.enabled).to be false
+    end
+
+    it "accepts nil", :aggregate_failures do
+      adapter.write(instance, nil)
+      expect(instance).to be_valid
+      expect(instance.enabled).to be_nil
+    end
+
+    context "but with NOT valid boolean" do
+      let(:invalid_value_scenarios) { [:string, :integer, :array, :hash] }
+
+      context "with string value" do
+        before { adapter.write(instance, "true") }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+
+        it "includes error message" do
+          instance.valid?
+          expect(instance.errors[:enabled]).to include(match(/must be true or false.*got: "true"/))
+        end
+      end
+
+      context "with integer value" do
+        before { adapter.write(instance, 1) }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+
+        it "includes error message" do
+          instance.valid?
+          expect(instance.errors[:enabled]).to include(match(/must be true or false.*got: 1/))
+        end
+      end
+
+      context "with array value" do
+        before { adapter.write(instance, []) }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+
+        it "includes error message" do
+          instance.valid?
+          expect(instance.errors[:enabled]).to include(match(/must be true or false.*got: \[\]/))
+        end
+      end
+
+      context "with hash value" do
+        before { adapter.write(instance, {}) }
+
+        it "marks record as invalid" do
+          expect(instance).not_to be_valid
+        end
+
+        it "includes error message" do
+          instance.valid?
+          expect(instance.errors[:enabled]).to include(match(/must be true or false.*got: \{\}/))
+        end
+      end
+    end
+
+    # Characteristic 2: Assignment method
+    describe "validation through Rails methods" do
+      context "with valid value" do
+        let(:valid_value) { true }
+
+        it "accepts update() with boolean", :aggregate_failures do
+          result = instance.update(enabled: valid_value)
+          expect(result).to be true
+          expect(instance.enabled).to eq(valid_value)
+        end
+      end
+
+      context "with invalid value" do
+        let(:invalid_value) { "invalid" }
+
+        it "rejects direct assignment" do
+          instance.enabled = invalid_value
+          expect(instance).not_to be_valid
+        end
+
+        it "rejects update() and returns false" do
+          result = instance.update(enabled: invalid_value)
+          expect(result).to be false
+        end
+
+        it "rejects update!() with exception" do
+          expect {
+            instance.update!(enabled: invalid_value)
+          }.to raise_error(ActiveRecord::RecordInvalid)
+        end
       end
     end
   end

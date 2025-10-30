@@ -89,6 +89,9 @@ module ModelSettings
         model_class.define_method("#{setting_name}_disabled?") do
           !public_send(setting_name)
         end
+
+        # Add Rails validation to ensure only boolean values (only for non-nested settings)
+        model_class.validates setting_name, boolean_value: true unless setting.children.any?
       end
 
       def read(instance)

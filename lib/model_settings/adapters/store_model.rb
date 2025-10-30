@@ -117,6 +117,16 @@ module ModelSettings
           !public_send(setting_name)
         end
 
+        # Define before_type_cast method for validator support
+        model_class.define_method("#{setting_name}_before_type_cast") do
+          store = public_send(column_name)
+          return nil unless store
+          store.public_send("#{setting_name}_before_type_cast")
+        end
+
+        # Add Rails validation to ensure only boolean values (only for non-nested settings)
+        model_class.validates setting_name, boolean_value: true unless setting.children.any?
+
         # Define changed? method using column-level dirty tracking
         model_class.define_method("#{setting_name}_changed?") do
           return false unless public_send("#{column_name}_changed?")

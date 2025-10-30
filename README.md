@@ -184,6 +184,41 @@ end
 
 ### Validation
 
+#### Built-in Boolean Validation
+
+ModelSettings automatically validates that all boolean settings receive only `true` or `false` values. This strict validation prevents common bugs from Rails' permissive type coercion:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :premium_mode, type: :column
+  setting :notifications, type: :json, storage: {column: :settings_data}
+end
+
+user = User.new
+
+# Valid: true/false values
+user.premium_mode = true   # ✓ Valid
+user.premium_mode = false  # ✓ Valid
+user.premium_mode = nil    # ✓ Valid (settings are optional by default)
+
+# Invalid: non-boolean values are rejected
+user.premium_mode = "true"      # ✗ Invalid - strings not allowed
+user.premium_mode = 1           # ✗ Invalid - integers not allowed
+user.premium_mode = "yes"       # ✗ Invalid - no type coercion
+user.valid? # => false
+user.errors[:premium_mode] # => ["must be true or false (got: \"true\")"]
+```
+
+**Why Strict Validation?**
+
+Rails' default boolean type casting converts strings (`"1"`, `"true"`, `"yes"`) and integers (`1`, `0`) to booleans. This permissive behavior can lead to unexpected bugs when settings are manipulated programmatically. ModelSettings enforces strict boolean values across all storage adapters (Column, JSON, StoreModel) to ensure data integrity.
+
+**Note:** Validation is automatically applied to all leaf settings (settings without nested children). Parent container settings and array-type settings are excluded from boolean validation.
+
+#### Custom Validators
+
 Add custom validators to settings:
 
 ```ruby
@@ -1020,8 +1055,71 @@ end
 - [ ] **Roles Module** - Role-based access control for settings
 - [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
-- [ ] **GraphQL Support** - Auto-generated GraphQL types and resolvers for settings
-- [ ] **Admin UI** - Web interface for managing settings
+
+## Development
+
+### Running Tests
+
+The gem uses RSpec for testing with comprehensive coverage across all adapters and features:
+
+```bash
+# Run all tests
+bundle exec rspec
+
+# Run specific test file
+bundle exec rspec spec/model_settings/adapters/json_spec.rb
+
+# Run with documentation format
+bundle exec rspec --format documentation
+```
+
+### Code Quality
+
+The project uses [StandardRB](https://github.com/standardrb/standard) for Ruby style and linting:
+
+```bash
+# Check code style
+bundle exec standardrb
+
+# Auto-fix issues
+bundle exec standardrb --fix
+```
+
+### Test Architecture
+
+- **In-memory SQLite**: Tests run against `:memory:` database for speed
+- **Transactional fixtures**: Each test runs in a transaction that rolls back automatically
+- **No migration logs**: `ActiveRecord::Migration.verbose = false` keeps test output clean
+- **Shared examples**: Common adapter behavior tested via shared examples for consistency
+- **Test isolation**: Full isolation between tests without manual cleanup
+
+### Test Coverage
+
+The test suite includes:
+
+- **551 examples** with 100% passing rate
+- Unit tests for all adapters (Column, JSON, StoreModel)
+- Integration tests for dependency engine (cascades, syncs, mixed storage)
+- Validation tests for boolean type checking
+- Edge case coverage (nil values, empty arrays, circular dependencies)
+- Shared behavior verification across all adapters
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/AlexeyMatskevich/model_settings.git
+cd model_settings
+
+# Install dependencies
+bundle install
+
+# Run tests
+bundle exec rspec
+
+# Check code style
+bundle exec standardrb
+```
 
 ## Contributing
 

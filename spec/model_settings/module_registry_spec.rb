@@ -57,11 +57,8 @@ RSpec.describe ModelSettings::ModuleRegistry do
         described_class.register_option(:custom_option)
       end
 
-      it "registers option" do
+      it "registers option with nil validator", :aggregate_failures do
         expect(described_class.registered_options).to have_key(:custom_option)
-      end
-
-      it "stores nil validator" do
         expect(described_class.registered_options[:custom_option]).to be_nil
       end
     end
@@ -111,7 +108,8 @@ RSpec.describe ModelSettings::ModuleRegistry do
   describe ".module_included?" do
     let(:test_module) { Module.new }
     let(:model_class) do
-      Class.new do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
         include ModelSettings::DSL
       end
     end
@@ -133,7 +131,8 @@ RSpec.describe ModelSettings::ModuleRegistry do
 
       context "but NOT included in model" do
         let(:model_class) do
-          Class.new do
+          Class.new(ActiveRecord::Base) do
+            self.table_name = "test_models"
             include ModelSettings::DSL
           end
         end
@@ -146,7 +145,8 @@ RSpec.describe ModelSettings::ModuleRegistry do
 
     context "when module is NOT registered" do
       let(:model_class) do
-        Class.new do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "test_models"
           include ModelSettings::DSL
         end
       end
@@ -222,33 +222,23 @@ RSpec.describe ModelSettings::ModuleRegistry do
     let(:setting) { ModelSettings::Setting.new(:test) }
     let(:model_class) { Class.new }
 
-    it "calls all registered definition hooks" do
+    # rubocop:disable RSpec/ExampleLength
+    it "calls hooks and passes correct arguments", :aggregate_failures do
       call_count = 0
-      described_class.on_setting_defined { |_setting, _model| call_count += 1 }
-      described_class.on_setting_defined { |_setting, _model| call_count += 1 }
-
-      execute
-
-      expect(call_count).to eq(2)
-    end
-
-    it "passes setting to hooks" do
       received_setting = nil
-      described_class.on_setting_defined { |s, _m| received_setting = s }
-
-      execute
-
-      expect(received_setting).to eq(setting)
-    end
-
-    it "passes model class to hooks" do
       received_model = nil
-      described_class.on_setting_defined { |_s, m| received_model = m }
-
+      described_class.on_setting_defined { |_setting, _model| call_count += 1 }
+      described_class.on_setting_defined { |s, m|
+        call_count += 1
+        received_setting = s
+        received_model = m
+      }
       execute
-
+      expect(call_count).to eq(2)
+      expect(received_setting).to eq(setting)
       expect(received_model).to eq(model_class)
     end
+    # rubocop:enable RSpec/ExampleLength
   end
   # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
@@ -259,33 +249,23 @@ RSpec.describe ModelSettings::ModuleRegistry do
     let(:settings) { [ModelSettings::Setting.new(:test)] }
     let(:model_class) { Class.new }
 
-    it "calls all registered compilation hooks" do
+    # rubocop:disable RSpec/ExampleLength
+    it "calls hooks and passes correct arguments", :aggregate_failures do
       call_count = 0
-      described_class.on_settings_compiled { |_settings, _model| call_count += 1 }
-      described_class.on_settings_compiled { |_settings, _model| call_count += 1 }
-
-      execute
-
-      expect(call_count).to eq(2)
-    end
-
-    it "passes settings array to hooks" do
       received_settings = nil
-      described_class.on_settings_compiled { |s, _m| received_settings = s }
-
-      execute
-
-      expect(received_settings).to eq(settings)
-    end
-
-    it "passes model class to hooks" do
       received_model = nil
-      described_class.on_settings_compiled { |_s, m| received_model = m }
-
+      described_class.on_settings_compiled { |_settings, _model| call_count += 1 }
+      described_class.on_settings_compiled { |s, m|
+        call_count += 1
+        received_settings = s
+        received_model = m
+      }
       execute
-
+      expect(call_count).to eq(2)
+      expect(received_settings).to eq(settings)
       expect(received_model).to eq(model_class)
     end
+    # rubocop:enable RSpec/ExampleLength
   end
   # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
@@ -330,38 +310,15 @@ RSpec.describe ModelSettings::ModuleRegistry do
       described_class.after_setting_change { |_i, _s, _o, _n| }
     end
 
-    it "clears all modules" do
+    it "clears all registered data", :aggregate_failures do
       reset
+
       expect(described_class.modules).to be_empty
-    end
-
-    it "clears all exclusive groups" do
-      reset
       expect(described_class.exclusive_groups).to be_empty
-    end
-
-    it "clears all registered options" do
-      reset
       expect(described_class.registered_options).to be_empty
-    end
-
-    it "clears all definition hooks" do
-      reset
       expect(described_class.definition_hooks).to be_empty
-    end
-
-    it "clears all compilation hooks" do
-      reset
       expect(described_class.compilation_hooks).to be_empty
-    end
-
-    it "clears all before_change hooks" do
-      reset
       expect(described_class.before_change_hooks).to be_empty
-    end
-
-    it "clears all after_change hooks" do
-      reset
       expect(described_class.after_change_hooks).to be_empty
     end
   end

@@ -5,8 +5,20 @@ require "store_model"
 
 # Integration tests that verify all adapters implement the same contract
 # using shared examples
-# rubocop:disable RSpec/DescribeClass, RSpecGuide/CharacteristicsAndContexts
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Adapter shared behavior" do
+  # Common setting name used across all adapters
+  let(:setting_name) { :enabled }
+
+  # Group all adapter contract checks into a single shared example
+  shared_examples "adapter contract" do
+    it_behaves_like "an adapter with helper methods"
+    it_behaves_like "an adapter with dirty tracking"
+    it_behaves_like "an adapter with read/write operations"
+    it_behaves_like "an adapter with persistence"
+  end
+
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe ModelSettings::Adapters::Column do
     let(:model_class) do
       Class.new(TestModel) do
@@ -21,25 +33,18 @@ RSpec.describe "Adapter shared behavior" do
     end
 
     let(:instance) { model_class.create! }
-    let(:setting_name) { :enabled }
     let(:adapter) do
       described_class.new(model_class, model_class.find_setting(:enabled))
     end
 
-    it_behaves_like "an adapter with helper methods"
-    it_behaves_like "an adapter with dirty tracking"
-    it_behaves_like "an adapter with read/write operations"
-    it_behaves_like "an adapter with persistence"
+    it_behaves_like "adapter contract"
   end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe ModelSettings::Adapters::Json do
     before do
-      ActiveRecord::Schema.define do
-        create_table :json_adapter_test_models, force: true do |t|
-          t.text :settings
-        end
-      end
-
+      # Table already exists from active_record.rb
       klass = Class.new(ActiveRecord::Base) do
         self.table_name = "json_adapter_test_models"
         include ModelSettings::DSL
@@ -55,25 +60,18 @@ RSpec.describe "Adapter shared behavior" do
     end
 
     let(:instance) { JsonAdapterTestModel.create! }
-    let(:setting_name) { :enabled }
     let(:adapter) do
       described_class.new(JsonAdapterTestModel, JsonAdapterTestModel.find_setting(:enabled))
     end
 
-    it_behaves_like "an adapter with helper methods"
-    it_behaves_like "an adapter with dirty tracking"
-    it_behaves_like "an adapter with read/write operations"
-    it_behaves_like "an adapter with persistence"
+    it_behaves_like "adapter contract"
   end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
+  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
   describe ModelSettings::Adapters::StoreModel do
     before do
-      ActiveRecord::Schema.define do
-        create_table :store_model_adapter_test_models, force: true do |t|
-          t.text :settings
-        end
-      end
-
+      # Table already exists from active_record.rb
       stub_const("TestSettings", Class.new do
         include ::StoreModel::Model
 
@@ -96,15 +94,12 @@ RSpec.describe "Adapter shared behavior" do
     let(:instance) do
       StoreModelAdapterTestModel.create!(settings: TestSettings.new)
     end
-    let(:setting_name) { :enabled }
     let(:adapter) do
       described_class.new(StoreModelAdapterTestModel, StoreModelAdapterTestModel.find_setting(:enabled))
     end
 
-    it_behaves_like "an adapter with helper methods"
-    it_behaves_like "an adapter with dirty tracking"
-    it_behaves_like "an adapter with read/write operations"
-    it_behaves_like "an adapter with persistence"
+    it_behaves_like "adapter contract"
   end
+  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 end
-# rubocop:enable RSpec/DescribeClass, RSpecGuide/CharacteristicsAndContexts
+# rubocop:enable RSpec/DescribeClass

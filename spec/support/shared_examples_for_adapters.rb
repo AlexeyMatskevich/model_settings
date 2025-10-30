@@ -23,13 +23,9 @@ RSpec.shared_examples "an adapter with helper methods" do
       context "when setting is disabled" do
         before { instance.update!("#{setting_name}": false) }
 
-        it "sets the setting to true" do
+        it "enables setting and marks as changed", :aggregate_failures do
           instance.public_send("#{setting_name}_enable!")
           expect(instance.public_send(setting_name)).to be true
-        end
-
-        it "marks the setting as changed" do
-          instance.public_send("#{setting_name}_enable!")
           expect(instance.public_send("#{setting_name}_changed?")).to be true
         end
       end
@@ -37,13 +33,9 @@ RSpec.shared_examples "an adapter with helper methods" do
       context "when setting is already enabled" do
         before { instance.update!("#{setting_name}": true) }
 
-        it "keeps the setting as true" do
+        it "keeps setting enabled and does NOT mark as changed", :aggregate_failures do
           instance.public_send("#{setting_name}_enable!")
           expect(instance.public_send(setting_name)).to be true
-        end
-
-        it "does NOT mark as changed" do
-          instance.public_send("#{setting_name}_enable!")
           expect(instance.public_send("#{setting_name}_changed?")).to be false
         end
       end
@@ -53,13 +45,9 @@ RSpec.shared_examples "an adapter with helper methods" do
       context "when setting is enabled" do
         before { instance.update!("#{setting_name}": true) }
 
-        it "sets the setting to false" do
+        it "disables setting and marks as changed", :aggregate_failures do
           instance.public_send("#{setting_name}_disable!")
           expect(instance.public_send(setting_name)).to be false
-        end
-
-        it "marks the setting as changed" do
-          instance.public_send("#{setting_name}_disable!")
           expect(instance.public_send("#{setting_name}_changed?")).to be true
         end
       end
@@ -67,13 +55,9 @@ RSpec.shared_examples "an adapter with helper methods" do
       context "when setting is already disabled" do
         before { instance.update!("#{setting_name}": false) }
 
-        it "keeps the setting as false" do
+        it "keeps setting disabled and does NOT mark as changed", :aggregate_failures do
           instance.public_send("#{setting_name}_disable!")
           expect(instance.public_send(setting_name)).to be false
-        end
-
-        it "does NOT mark as changed" do
-          instance.public_send("#{setting_name}_disable!")
           expect(instance.public_send("#{setting_name}_changed?")).to be false
         end
       end
@@ -155,13 +139,13 @@ RSpec.shared_examples "an adapter with dirty tracking" do
         end
       end
 
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when value has NOT changed" do
-        let(:expected_result) { false }
-
         it "returns false" do
-          expect(adapter.changed?(instance)).to be expected_result
+          expect(adapter.changed?(instance)).to be false
         end
       end
+      # rubocop:enable RSpecGuide/ContextSetup
     end
 
     describe "#was" do
@@ -177,12 +161,10 @@ RSpec.shared_examples "an adapter with dirty tracking" do
       end
 
       context "when value has NOT changed" do
-        let(:expected_value) { false }
-
         before { instance.update!("#{setting_name}": false) }
 
         it "returns current value" do
-          expect(adapter.was(instance)).to be expected_value
+          expect(adapter.was(instance)).to be false
         end
       end
     end
@@ -200,12 +182,10 @@ RSpec.shared_examples "an adapter with dirty tracking" do
       end
 
       context "when value has NOT changed" do
-        let(:expected_change) { nil }
-
         before { instance.update!("#{setting_name}": false) }
 
         it "returns nil" do
-          expect(adapter.change(instance)).to be expected_change
+          expect(adapter.change(instance)).to be_nil
         end
       end
     end
@@ -243,13 +223,9 @@ RSpec.shared_examples "an adapter with read/write operations" do
       context "when writing true" do
         let(:new_value) { true }
 
-        it "sets value to true" do
+        it "sets value to true and marks as changed", :aggregate_failures do
           adapter.write(instance, new_value)
           expect(instance.public_send(setting_name)).to be true
-        end
-
-        it "marks as changed" do
-          adapter.write(instance, new_value)
           expect(instance.public_send("#{setting_name}_changed?")).to be true
         end
       end
@@ -259,13 +235,9 @@ RSpec.shared_examples "an adapter with read/write operations" do
 
         before { instance.update!("#{setting_name}": true) }
 
-        it "sets value to false" do
+        it "sets value to false and marks as changed", :aggregate_failures do
           adapter.write(instance, new_value)
           expect(instance.public_send(setting_name)).to be false
-        end
-
-        it "marks as changed" do
-          adapter.write(instance, new_value)
           expect(instance.public_send("#{setting_name}_changed?")).to be true
         end
       end
@@ -281,15 +253,10 @@ RSpec.shared_examples "an adapter with persistence" do
   # - setting_name: symbol name of the setting
 
   describe "persistence" do
-    it "persists changes to database" do
+    it "persists changes to database and clears change tracking", :aggregate_failures do
       instance.public_send("#{setting_name}=", true)
       instance.save!
       expect(instance.reload.public_send(setting_name)).to be true
-    end
-
-    it "clears changes after save" do
-      instance.public_send("#{setting_name}=", true)
-      instance.save!
       expect(instance.public_send("#{setting_name}_changed?")).to be false
     end
   end

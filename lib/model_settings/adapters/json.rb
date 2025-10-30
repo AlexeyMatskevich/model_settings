@@ -103,6 +103,14 @@ module ModelSettings
           !public_send(setting_name)
         end
 
+        # Add Rails validation to ensure only boolean values (only for boolean settings)
+        # Skip validation for:
+        # - Settings with nested children (parent containers)
+        # - Array-type settings (array: true option)
+        is_array_setting = setting.options[:array] == true
+
+        model_class.validates setting_name, boolean_value: true unless setting.children.any? || is_array_setting
+
         # Setup nested settings if any
         setup_nested_settings(column_name) if setting.children.any?
       end
@@ -344,6 +352,7 @@ module ModelSettings
           child_name = child_setting.name
 
           # Create adapter for child setting and setup accessors
+          # Validation is already included in setup_accessors setter
           child_adapter = self.class.new(model_class, child_setting)
           child_adapter.send(:setup_accessors, column_name, child_name)
 
@@ -398,6 +407,14 @@ module ModelSettings
           model_class.define_method("#{child_name}_disabled?") do
             !public_send(child_name)
           end
+
+          # Add Rails validation for nested setting (only for boolean settings)
+          # Skip validation for:
+          # - Settings with nested children (parent containers)
+          # - Array-type settings (array: true option)
+          is_array_setting = child_setting.options[:array] == true
+
+          model_class.validates child_name, boolean_value: true unless child_setting.children.any? || is_array_setting
 
           # Recursively setup nested settings for grandchildren
           if child_setting.children.any?
