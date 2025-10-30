@@ -269,6 +269,70 @@ RSpec.describe ModelSettings::ModuleRegistry do
   end
   # rubocop:enable RSpecGuide/CharacteristicsAndContexts
 
+  describe ".check_exclusive_conflict!" do
+    let(:pundit_module) { Module.new }
+    let(:roles_module) { Module.new }
+    let(:model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
+        include ModelSettings::DSL
+      end
+    end
+
+    before do
+      described_class.register_module(:pundit, pundit_module)
+      described_class.register_module(:roles, roles_module)
+      described_class.register_exclusive_group(:authorization, :pundit)
+      described_class.register_exclusive_group(:authorization, :roles)
+    end
+
+    context "when no conflicting modules are included" do
+      it "does NOT raise error" do
+        expect {
+          described_class.check_exclusive_conflict!(model_class, :pundit)
+        }.not_to raise_error
+      end
+    end
+
+    context "when conflicting module is already included" do
+      before do
+        model_class.include(roles_module)
+      end
+
+      it "raises ExclusiveGroupConflictError" do
+        expect {
+          described_class.check_exclusive_conflict!(model_class, :pundit)
+        }.to raise_error(ModelSettings::ModuleRegistry::ExclusiveGroupConflictError, /conflicts with :roles/)
+      end
+    end
+
+    context "when same module is being checked again" do
+      before do
+        model_class.include(pundit_module)
+      end
+
+      it "does NOT raise error" do
+        expect {
+          described_class.check_exclusive_conflict!(model_class, :pundit)
+        }.not_to raise_error
+      end
+    end
+
+    context "when module is NOT in any exclusive group" do
+      let(:other_module) { Module.new }
+
+      before do
+        described_class.register_module(:other, other_module)
+      end
+
+      it "does NOT raise error" do
+        expect {
+          described_class.check_exclusive_conflict!(model_class, :other)
+        }.not_to raise_error
+      end
+    end
+  end
+
   describe ".validate_exclusive_groups!" do
     before do
       described_class.register_exclusive_group(:authorization, :pundit)

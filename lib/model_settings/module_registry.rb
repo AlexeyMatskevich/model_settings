@@ -12,6 +12,8 @@ module ModelSettings
   #   ModelSettings::ModuleRegistry.on_settings_compiled { |settings| ... }
   #
   class ModuleRegistry
+    # Error raised when trying to include conflicting modules from an exclusive group
+    class ExclusiveGroupConflictError < StandardError; end
     class << self
       # Register a module
       #
@@ -173,6 +175,39 @@ module ModelSettings
       # @return [Module, nil]
       def get_module(name)
         modules[name]
+      end
+
+      # Check for conflicts when including a module
+      #
+      # This should be called in the `included` block of a module to prevent
+      # conflicting modules from being included together.
+      #
+      # @param model_class [Class] The model class that's including the module
+      # @param module_name [Symbol] Name of the module being included
+      # @raise [ExclusiveGroupConflictError] if there's a conflict
+      #
+      # @example
+      #   included do
+      #     ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :roles)
+      #   end
+      #
+      def check_exclusive_conflict!(model_class, module_name)
+        exclusive_groups.each do |group_name, module_names|
+          next unless module_names.include?(module_name)
+
+          # Find other modules from the same group that are already included
+          conflicting = module_names.find do |other_module|
+            next if other_module == module_name
+            module_included?(other_module, model_class)
+          end
+
+          if conflicting
+            raise ExclusiveGroupConflictError,
+              "Cannot include #{module_name.inspect} module: conflicts with #{conflicting.inspect} module " \
+              "(both are in #{group_name.inspect} exclusive group). " \
+              "Use only ONE authorization module at a time."
+          end
+        end
       end
 
       # Validate that exclusive groups don't have conflicts

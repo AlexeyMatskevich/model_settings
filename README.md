@@ -6,6 +6,7 @@ Declarative configuration management DSL for Rails models with support for multi
 
 - **Multiple Storage Backends**: Column, JSON/JSONB, and StoreModel support
 - **Flexible DSL**: Clean, declarative syntax for defining settings
+- **Authorization**: Built-in Roles Module for role-based access control (RBAC)
 - **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
@@ -13,7 +14,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Query Interface**: Powerful methods for finding settings by metadata
 - **Deprecation Tracking**: Built-in deprecation warnings and audit trails
 - **I18n Support**: Full internationalization for labels and descriptions
-- **Module System**: Extensible architecture for custom modules
+- **Module System**: Extensible architecture for custom modules with exclusive groups
 - **Mixed Storage**: Support for complex parent-child relationships across storage types
 
 ## Installation
@@ -428,6 +429,163 @@ user.t_help_for(:notifications_enabled)        # => "You can change this setting
 user.translations_for(:notifications_enabled)
 # => {label: "...", description: "...", help: "..."}
 ```
+
+### Authorization with Roles Module
+
+ModelSettings provides simple role-based access control (RBAC) through the built-in Roles Module. This allows you to control who can view or edit specific settings without requiring a full authorization framework like Pundit or ActionPolicy.
+
+**Important:** Authorization modules (Roles, Pundit, ActionPolicy) are mutually exclusive. You can only use ONE authorization module at a time per model.
+
+#### Basic Role-Based Authorization
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  # Define settings with role restrictions
+  setting :billing_override,
+          type: :column,
+          viewable_by: [:admin, :finance, :manager],
+          editable_by: [:admin, :finance]
+
+  setting :api_access,
+          type: :column,
+          viewable_by: [:admin],
+          editable_by: [:admin]
+
+  setting :display_name,
+          type: :column,
+          viewable_by: :all,              # Anyone can view
+          editable_by: [:admin, :user]    # Only admin and user can edit
+
+  setting :notifications,
+          type: :column
+          # No restrictions = anyone can view/edit
+end
+
+# Check permissions
+user = User.create!
+user.can_view_setting?(:billing_override, :finance)  # => true
+user.can_view_setting?(:billing_override, :guest)    # => false
+user.can_edit_setting?(:billing_override, :admin)    # => true
+user.can_edit_setting?(:billing_override, :manager)  # => false
+
+# Get all settings viewable/editable by a role
+User.settings_viewable_by(:finance)
+# => [:billing_override, :display_name]
+
+User.settings_editable_by(:finance)
+# => [:billing_override]
+```
+
+#### Controller Integration
+
+Use role-based filtering to protect settings in your controllers:
+
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+
+    # Get editable settings for current user's role
+    editable_settings = User.settings_editable_by(current_user.role)
+
+    # Filter params to only allow editable settings
+    permitted_params = params.require(:user).permit(*editable_settings)
+
+    if @user.update(permitted_params)
+      redirect_to @user
+    else
+      render :edit
+    end
+  end
+end
+```
+
+#### Role Inheritance with Nested Settings
+
+Roles are inherited by child settings:
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  setting :billing,
+          type: :json,
+          storage: {column: :settings},
+          viewable_by: [:admin, :finance],
+          editable_by: [:admin] do
+    # Children inherit parent's roles automatically
+    setting :invoices, default: false
+    setting :payments, default: false
+    setting :subscriptions, default: false
+  end
+end
+
+# All children inherit parent's role restrictions
+org = Organization.create!
+org.can_view_setting?(:invoices, :finance)  # => true (inherited)
+org.can_edit_setting?(:invoices, :finance)  # => false (inherited)
+```
+
+#### Special Values
+
+- **`:all`** - Setting is viewable by anyone (use for public settings)
+- **`nil` or omitted** - No restrictions (anyone can view/edit)
+- **Array of symbols** - Specific roles allowed (e.g., `[:admin, :finance]`)
+
+#### Authorization Options
+
+```ruby
+setting :setting_name,
+        viewable_by: :all,              # Symbol - anyone can view
+        editable_by: [:admin, :finance] # Array - only these roles can edit
+
+setting :other_setting,
+        viewable_by: [:admin, :manager], # Array - only these roles
+        editable_by: :admin              # Symbol - single role (converted to array)
+```
+
+#### View Layer Integration
+
+```erb
+<!-- In your views -->
+<% if @user.can_view_setting?(:billing_override, current_user.role) %>
+  <div class="setting">
+    <%= @user.billing_override %>
+
+    <% if @user.can_edit_setting?(:billing_override, current_user.role) %>
+      <%= link_to "Edit", edit_setting_path(:billing_override) %>
+    <% end %>
+  </div>
+<% end %>
+
+<!-- Generate settings form with role-based filtering -->
+<%= form_for @user do |f| %>
+  <% User.settings_editable_by(current_user.role).each do |setting_name| %>
+    <%= f.check_box setting_name %>
+    <%= f.label setting_name %>
+  <% end %>
+<% end %>
+```
+
+#### Exclusive Authorization Groups
+
+You cannot mix authorization modules:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+  include PunditModule  # ❌ Raises ExclusiveGroupConflictError!
+end
+# => Cannot include pundit module: conflicts with :roles module
+#    (both are in :authorization exclusive group)
+```
+
+This prevents conflicting authorization strategies and ensures consistent behavior.
 
 ## Dependency Management
 
@@ -1047,12 +1205,12 @@ end
 - [x] **StoreModel adapter** - Full support for complex nested settings with StoreModel
 - [x] **Dependency Engine** - Cascades, syncs (forward/inverse/backward), and cycle detection
 - [x] **Mixed Storage Types** - Column parents with JSON children and vice versa
+- [x] **Roles Module** - Role-based access control for settings with viewable_by/editable_by
 
 ### Planned
 
 - [ ] **Authorization Integration** - Pundit/ActionPolicy support for permission-based settings
 - [ ] **Plans Module** - Subscription tier management with automatic feature gating
-- [ ] **Roles Module** - Role-based access control for settings
 - [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
 
@@ -1097,12 +1255,14 @@ bundle exec standardrb --fix
 
 The test suite includes:
 
-- **551 examples** with 100% passing rate
+- **692 examples** with 100% passing rate
 - Unit tests for all adapters (Column, JSON, StoreModel)
 - Integration tests for dependency engine (cascades, syncs, mixed storage)
+- Authorization tests for Roles Module with RBAC
 - Validation tests for boolean type checking
 - Edge case coverage (nil values, empty arrays, circular dependencies)
 - Shared behavior verification across all adapters
+- Module registry tests for exclusive groups and conflict detection
 
 ### Development Setup
 
