@@ -6,7 +6,7 @@ Declarative configuration management DSL for Rails models with support for multi
 
 - **Multiple Storage Backends**: Column, JSON/JSONB, and StoreModel support
 - **Flexible DSL**: Clean, declarative syntax for defining settings
-- **Authorization**: Built-in Roles Module for role-based access control (RBAC)
+- **Authorization**: Built-in Roles Module (RBAC) and Pundit Module (policy-based authorization)
 - **Dependency Management**: Cascades, syncs, and automatic propagation with cycle detection
 - **Validation Framework**: Custom validators with lifecycle hooks
 - **Callback System**: Before/after callbacks for state changes
@@ -586,6 +586,202 @@ end
 ```
 
 This prevents conflicting authorization strategies and ensures consistent behavior.
+
+### Authorization with Pundit Module
+
+For applications using [Pundit](https://github.com/varvet/pundit) for authorization, ModelSettings provides seamless integration through the Pundit Module. This allows you to leverage your existing Pundit policies to control access to settings.
+
+**Important:** Authorization modules (Roles, Pundit, ActionPolicy) are mutually exclusive. You can only use ONE authorization module at a time per model.
+
+#### Basic Pundit Integration
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Pundit
+
+  # Use policy methods for authorization
+  setting :billing_override,
+          type: :column,
+          authorize_with: :manage_billing?
+
+  setting :api_access,
+          type: :column,
+          authorize_with: :admin?
+
+  setting :system_config,
+          type: :column,
+          authorize_with: :admin?
+
+  setting :display_name,
+          type: :column
+          # No authorization = unrestricted
+end
+
+# In your UserPolicy
+class UserPolicy < ApplicationPolicy
+  def manage_billing?
+    user.admin? || user.finance?
+  end
+
+  def admin?
+    user.admin?
+  end
+
+  # Helper method to get permitted settings
+  def permitted_settings
+    record.class._authorized_settings.select do |_name, method|
+      send(method)
+    end.keys
+  end
+end
+```
+
+#### Controller Integration with Pundit
+
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize @user
+
+    # Get settings allowed by policy
+    policy = policy(@user)
+    allowed_settings = policy.permitted_settings
+
+    # Filter params to only include allowed settings
+    permitted_params = params.require(:user).permit(*allowed_settings)
+
+    if @user.update(permitted_params)
+      redirect_to @user
+    else
+      render :edit
+    end
+  end
+end
+```
+
+#### Querying Authorization Metadata
+
+```ruby
+# Get the policy method for a setting
+User.authorization_for_setting(:billing_override)
+# => :manage_billing?
+
+# Get all settings requiring a specific permission
+User.settings_requiring(:admin?)
+# => [:api_access, :system_config]
+
+# Get all settings with authorization
+User.authorized_settings
+# => [:billing_override, :api_access, :system_config]
+```
+
+#### View Layer with Pundit
+
+```erb
+<!-- In your views -->
+<% policy = policy(@user) %>
+<% policy.permitted_settings.each do |setting_name| %>
+  <div class="setting">
+    <%= f.check_box setting_name %>
+    <%= f.label setting_name %>
+  </div>
+<% end %>
+
+<!-- Check specific permission -->
+<% if policy.manage_billing? %>
+  <%= f.check_box :billing_override %>
+  <%= f.label :billing_override %>
+<% end %>
+```
+
+#### Validation Rules
+
+The Pundit Module enforces strict validation:
+
+```ruby
+# ✓ Valid - Symbol pointing to policy method
+setting :feature, authorize_with: :manage_feature?
+
+# ✗ Invalid - String not allowed
+setting :feature, authorize_with: "manage_feature?"
+# => ArgumentError: authorize_with must be a Symbol
+
+# ✗ Invalid - Array not allowed (use Roles Module for this)
+setting :feature, authorize_with: [:admin?, :finance?]
+# => ArgumentError: authorize_with must be a Symbol
+
+# ✗ Invalid - Proc not allowed
+setting :feature, authorize_with: -> { true }
+# => ArgumentError: authorize_with must be a Symbol
+```
+
+**Why only Symbols?** Pundit policies are method-based. For simple role arrays or custom logic, use the Roles Module instead.
+
+#### Advanced Policy Pattern
+
+```ruby
+# In your UserPolicy
+class UserPolicy < ApplicationPolicy
+  # Group permissions by category
+  def billing_permissions
+    User.settings_requiring(:manage_billing?)
+  end
+
+  def admin_permissions
+    User.settings_requiring(:admin?)
+  end
+
+  # Combine with scopes
+  def permitted_settings_for_form
+    return [] unless can_edit_user?
+
+    permitted_settings
+  end
+
+  # Check if user can edit any settings
+  def can_edit_settings?
+    permitted_settings.any?
+  end
+
+  private
+
+  def can_edit_user?
+    user.admin? || record == user
+  end
+end
+```
+
+#### Testing with Pundit
+
+```ruby
+RSpec.describe UserPolicy do
+  subject { described_class.new(user, record) }
+
+  let(:record) { User.new }
+
+  context "when user is admin" do
+    let(:user) { User.new(role: :admin) }
+
+    it "permits all settings" do
+      expect(subject.permitted_settings).to include(
+        :billing_override,
+        :api_access,
+        :system_config
+      )
+    end
+  end
+
+  context "when user is finance" do
+    let(:user) { User.new(role: :finance) }
+
+    it "permits only billing settings" do
+      expect(subject.permitted_settings).to eq([:billing_override])
+    end
+  end
+end
+```
 
 ## Dependency Management
 
@@ -1206,10 +1402,11 @@ end
 - [x] **Dependency Engine** - Cascades, syncs (forward/inverse/backward), and cycle detection
 - [x] **Mixed Storage Types** - Column parents with JSON children and vice versa
 - [x] **Roles Module** - Role-based access control for settings with viewable_by/editable_by
+- [x] **Pundit Module** - Seamless Pundit integration with authorize_with for policy-based authorization
 
 ### Planned
 
-- [ ] **Authorization Integration** - Pundit/ActionPolicy support for permission-based settings
+- [ ] **ActionPolicy Module** - ActionPolicy integration for rule-based settings authorization
 - [ ] **Plans Module** - Subscription tier management with automatic feature gating
 - [ ] **Documentation Generator** - Rake tasks to generate settings documentation
 - [ ] **Settings Inheritance** - Inherit settings across model hierarchies
@@ -1255,11 +1452,11 @@ bundle exec standardrb --fix
 
 The test suite includes:
 
-- **692 examples** with 100% passing rate
+- **716 examples** with 100% passing rate
 - Unit tests for all adapters (Column, JSON, StoreModel)
 - Integration tests for dependency engine (cascades, syncs, mixed storage)
-- Authorization tests for Roles Module with RBAC
-- Validation tests for boolean type checking
+- Authorization tests for Roles Module (RBAC) and Pundit Module (policy-based)
+- Validation tests for boolean type checking and authorization options
 - Edge case coverage (nil values, empty arrays, circular dependencies)
 - Shared behavior verification across all adapters
 - Module registry tests for exclusive groups and conflict detection
