@@ -83,7 +83,7 @@ module ModelSettings
       @_validating_value = nil
 
       # Return true if no errors were added
-      !@setting_errors.added?(setting_name, :invalid)
+      !@setting_errors.where(setting_name).any?
     end
 
     # Validate all settings
