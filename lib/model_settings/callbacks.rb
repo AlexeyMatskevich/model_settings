@@ -64,6 +64,59 @@ module ModelSettings
       false
     end
 
+    # Execute around callback that wraps an operation
+    #
+    # Around callbacks must yield to execute the wrapped operation.
+    # If the callback doesn't yield, the operation is aborted.
+    #
+    # @param setting [Setting] The setting object
+    # @param action [Symbol] The action (:enable, :disable, :change)
+    # @yield The block containing the actual operation
+    # @return [Boolean] true if callback executed (even if it didn't yield)
+    #
+    # @example
+    #   execute_around_callback(setting, :enable) do
+    #     # This code runs only if the around callback yields
+    #     self.feature = true
+    #   end
+    #
+    def execute_around_callback(setting, action, &operation)
+      callback_name = :"around_#{action}"
+      callback = setting.options[callback_name]
+
+      # No around callback - just execute the operation
+      unless callback
+        operation.call
+        return true
+      end
+
+      # Execute around callback with the operation block
+      case callback
+      when Symbol
+        # Method must accept a block and yield to it
+        public_send(callback, &operation)
+      when Proc
+        # Execute the proc in instance context with yield pointing to operation
+        # Wrap in a new Proc so yield is available to the callback
+        proc { instance_exec(&callback) }.call(&operation)
+      when Array
+        # Only execute first around callback (around callbacks don't chain)
+        cb = callback.first
+        case cb
+        when Symbol
+          public_send(cb, &operation)
+        when Proc
+          proc { instance_exec(&cb) }.call(&operation)
+        end
+      end
+
+      true
+    rescue => e
+      # Log error but don't raise to allow operation to continue
+      Rails.logger.error("Setting callback #{callback_name} failed: #{e.message}") if defined?(Rails)
+      false
+    end
+
     # Track that a setting has changed and needs after_commit callbacks
     #
     # @param setting [Setting] The setting that changed

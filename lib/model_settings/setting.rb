@@ -141,6 +141,53 @@ module ModelSettings
       @options.fetch(:metadata, {})
     end
 
+    # Check if setting has a metadata key
+    #
+    # Supports both symbol and string keys for flexibility.
+    #
+    # @param key [Symbol, String] Metadata key to check
+    # @return [Boolean] true if metadata contains the key
+    #
+    # @example
+    #   setting.has_metadata?(:tier) #=> true
+    #   setting.has_metadata?("tier") #=> true
+    #
+    def has_metadata?(key)
+      metadata.key?(key) || metadata.key?(key.to_s)
+    end
+
+    # Get metadata value for a key
+    #
+    # Supports both symbol and string keys, checking both variants.
+    #
+    # @param key [Symbol, String] Metadata key
+    # @return [Object, nil] The metadata value or nil if not found
+    #
+    # @example
+    #   setting.metadata_value(:tier) #=> :premium
+    #   setting.metadata_value("tier") #=> :premium
+    #
+    def metadata_value(key)
+      metadata[key] || metadata[key.to_s]
+    end
+
+    # Check if array metadata includes a value
+    #
+    # Returns false if the metadata key doesn't exist or isn't an array.
+    #
+    # @param key [Symbol, String] Metadata key
+    # @param value [Object] Value to check for inclusion
+    # @return [Boolean] true if the metadata value is an array containing the value
+    #
+    # @example
+    #   setting.metadata_includes?(:plans, :enterprise) #=> true
+    #   setting.metadata_includes?(:tier, :premium) #=> false (not an array)
+    #
+    def metadata_includes?(key, value)
+      meta_value = metadata_value(key)
+      meta_value.is_a?(Array) && meta_value.include?(value)
+    end
+
     # Get the path from root to this setting
     #
     # @return [Array<Symbol>] Array of setting names forming the path

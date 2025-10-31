@@ -55,7 +55,7 @@ module ModelSettings
         lines << "| **Default** | `#{format_value(setting.default)}` |" if setting.options.key?(:default)
 
         # Authorization
-        if auth_info = format_authorization(setting)
+        if (auth_info = format_authorization(setting))
           lines << "| **Authorization** | #{auth_info} |"
         end
 

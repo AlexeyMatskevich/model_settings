@@ -45,6 +45,67 @@ module ModelSettings
         end
       end
 
+      # Alias for spec-compliant naming
+      alias_method :with_metadata, :settings_with_metadata_key
+
+      # Find settings WITHOUT a specific metadata key
+      #
+      # Opposite of `with_metadata` - returns settings that don't have the key.
+      #
+      # @param key [Symbol, String] Metadata key
+      # @return [Array<Setting>] Settings without the key
+      #
+      # @example
+      #   User.without_metadata(:description)
+      #   User.without_metadata(:deprecated)
+      #
+      def without_metadata(key)
+        all_settings_recursive.reject do |setting|
+          setting.has_metadata?(key)
+        end
+      end
+
+      # Query settings by metadata value with operators
+      #
+      # Provides advanced metadata querying with exact match, array inclusion,
+      # or custom block filters.
+      #
+      # @param key [Symbol, nil] Metadata key (nil when using block)
+      # @param includes [Object] Value that array metadata should include
+      # @param equals [Object] Value that must match exactly
+      # @yield [metadata] Optional block for custom filter logic
+      # @return [Array<Setting>] Matching settings
+      #
+      # @example Exact match
+      #   User.where_metadata(:tier, equals: :premium)
+      #
+      # @example Array includes
+      #   User.where_metadata(:plans, includes: :professional)
+      #
+      # @example Block filter
+      #   User.where_metadata { |meta| meta[:tier] == :premium && !meta[:deprecated] }
+      #
+      # @example No filter (returns all)
+      #   User.where_metadata
+      #
+      def where_metadata(key = nil, includes: nil, equals: nil, &block)
+        settings = all_settings_recursive
+
+        if block_given?
+          # Custom filter with block
+          settings.select { |s| block.call(s.metadata) }
+        elsif equals
+          # Exact match
+          settings.select { |s| s.metadata_value(key) == equals }
+        elsif includes
+          # Array includes
+          settings.select { |s| s.metadata_includes?(key, includes) }
+        else
+          # No filter specified - return all
+          settings
+        end
+      end
+
       # Find settings by storage type
       #
       # @param type [Symbol] Storage type (:column, :json, :store_model)

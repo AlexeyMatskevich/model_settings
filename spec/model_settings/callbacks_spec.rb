@@ -325,6 +325,195 @@ RSpec.describe ModelSettings::Callbacks do
     end
   end
 
+  describe "#execute_around_callback" do
+    let(:setting) { model_class.find_setting(:enabled) }
+
+    context "when callback is Symbol" do
+      before do
+        model_class.class_eval do
+          attr_accessor :call_order
+
+          def around_callback
+            self.call_order ||= []
+            self.call_order << :before
+            yield
+            self.call_order << :after
+          end
+        end
+
+        setting.options[:around_enable] = :around_callback
+      end
+
+      it "wraps the operation" do
+        instance.call_order = []
+        instance.execute_around_callback(setting, :enable) do
+          instance.call_order << :operation
+        end
+
+        expect(instance.call_order).to eq([:before, :operation, :after])
+      end
+
+      it "executes operation when callback yields" do
+        executed = false
+        instance.execute_around_callback(setting, :enable) do
+          executed = true
+        end
+
+        expect(executed).to be true
+      end
+
+      context "but when callback does NOT yield" do
+        before do
+          model_class.class_eval do
+            def no_yield_callback
+              # Deliberately don't yield
+              self.call_order ||= []
+              self.call_order << :callback_ran
+            end
+          end
+
+          setting.options[:around_enable] = :no_yield_callback
+        end
+
+        it "does NOT execute the operation" do
+          instance.call_order = []
+          executed = false
+
+          instance.execute_around_callback(setting, :enable) do
+            executed = true
+          end
+
+          expect(executed).to be false
+        end
+
+        it "runs callback code" do
+          instance.call_order = []
+
+          instance.execute_around_callback(setting, :enable) {}
+
+          expect(instance.call_order).to eq([:callback_ran])
+        end
+      end
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no around callback is defined" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "executes the operation directly" do
+        executed = false
+        instance.execute_around_callback(setting, :enable) do
+          executed = true
+        end
+
+        expect(executed).to be true
+      end
+    end
+
+    context "when callback raises error" do
+      before do
+        model_class.class_eval do
+          def error_callback
+            raise StandardError, "callback error"
+          end
+        end
+
+        setting.options[:around_enable] = :error_callback
+      end
+
+      it "returns false" do
+        expect(instance.execute_around_callback(setting, :enable) {}).to be false
+      end
+
+      it "does NOT raise exception" do
+        expect { instance.execute_around_callback(setting, :enable) {} }.not_to raise_error
+      end
+    end
+  end
+
+  describe "around callbacks in helper methods" do
+    let(:model_class) do
+      Class.new(TestModel) do
+        def self.name
+          "AroundCallbackModel"
+        end
+
+        include ModelSettings::DSL
+
+        attr_accessor :timing_log
+
+        setting :feature, type: :column, default: false
+
+        def log_timing
+          self.timing_log ||= []
+          self.timing_log << :start
+          yield
+          self.timing_log << :end
+        end
+      end
+    end
+
+    let(:instance) { model_class.create! }
+    let(:setting) { model_class.find_setting(:feature) }
+
+    it "logs timing around enable operation" do
+      setting.options[:around_enable] = :log_timing
+      instance.timing_log = []
+
+      instance.feature_enable!
+
+      expect(instance.timing_log).to eq([:start, :end])
+    end
+
+    it "enables the feature" do
+      setting.options[:around_enable] = :log_timing
+
+      instance.feature_enable!
+
+      expect(instance.feature).to be true
+    end
+
+    it "logs timing around disable operation" do
+      instance.feature = true
+      instance.save!
+
+      setting.options[:around_disable] = :log_timing
+      instance.timing_log = []
+
+      instance.feature_disable!
+
+      expect(instance.timing_log).to eq([:start, :end])
+    end
+
+    it "disables the feature" do
+      instance.feature = true
+      instance.save!
+
+      setting.options[:around_disable] = :log_timing
+
+      instance.feature_disable!
+
+      expect(instance.feature).to be false
+    end
+
+    context "when around callback aborts by not yielding" do
+      before do
+        model_class.class_eval do
+          def abort_callback
+            # Don't yield - abort operation
+          end
+        end
+
+        setting.options[:around_enable] = :abort_callback
+      end
+
+      it "does NOT change the setting value" do
+        instance.feature_enable!
+
+        expect(instance.feature).to be false
+      end
+    end
+  end
+
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "integration with ActiveRecord" do
     context "when after_commit hook fires" do

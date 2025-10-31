@@ -54,6 +54,29 @@ RSpec.describe ModelSettings::Query do
         validate_with: :check_api_quota,
         metadata: {category: "api", tier: "premium"}
 
+      # Settings for testing array metadata
+      setting :enterprise_features,
+        type: :column,
+        default: false,
+        metadata: {
+          plans: [:professional, :enterprise],
+          tier: "premium"
+        }
+
+      setting :basic_features,
+        type: :column,
+        default: true,
+        metadata: {
+          plans: [:basic, :professional],
+          tier: "basic"
+        }
+
+      # Setting without description metadata (for without_metadata tests)
+      setting :undocumented_feature,
+        type: :column,
+        default: false,
+        metadata: {category: "experimental"}
+
       def check_email
       end
 
@@ -275,12 +298,12 @@ RSpec.describe ModelSettings::Query do
 
     it "counts settings by type" do
       count = model_class.settings_count(type: :column)
-      expect(count).to eq(6) # All column settings: security_enabled, analytics_enabled, premium_mode, notifications, email_enabled, api_access
+      expect(count).to eq(9) # All column settings: security_enabled, analytics_enabled, premium_mode, notifications, email_enabled, api_access, enterprise_features, basic_features, undocumented_feature
     end
 
     it "counts settings by metadata" do
       count = model_class.settings_count(metadata: {tier: "premium"})
-      expect(count).to eq(3) # security_enabled, premium_mode, api_access
+      expect(count).to eq(4) # security_enabled, premium_mode, api_access, enterprise_features
     end
 
     it "counts settings by deprecated status" do
@@ -304,7 +327,166 @@ RSpec.describe ModelSettings::Query do
         type: :column,
         metadata: {tier: "premium"}
       )
-      expect(count).to eq(3)
+      expect(count).to eq(4) # security_enabled, premium_mode, api_access, enterprise_features
+    end
+  end
+
+  describe ".with_metadata" do
+    it "returns settings with specified metadata key (alias test)" do
+      results = model_class.with_metadata(:tier)
+      expect(results.map(&:name)).to include(:security_enabled, :analytics_enabled, :premium_mode, :api_access)
+    end
+
+    it "works with symbol keys" do
+      results = model_class.with_metadata(:tier)
+      expect(results.map(&:name)).to include(:security_enabled, :analytics_enabled)
+    end
+
+    it "is an alias for settings_with_metadata_key" do
+      expect(model_class.method(:with_metadata).original_name).to eq(:settings_with_metadata_key)
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when key does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "returns empty array" do
+        results = model_class.with_metadata(:nonexistent_key)
+        expect(results).to be_empty
+      end
+    end
+  end
+
+  describe ".without_metadata" do
+    it "returns settings without specified metadata key" do
+      # Most settings have :tier, find those that don't
+      results = model_class.without_metadata(:tier)
+      expect(results.map(&:name)).to include(:notifications, :features, :undocumented_feature)
+    end
+
+    it "excludes settings that have the key" do
+      results = model_class.without_metadata(:tier)
+      expect(results.map(&:name)).not_to include(:security_enabled, :analytics_enabled, :premium_mode, :api_access)
+    end
+
+    it "returns non-empty results for uncommon key" do
+      results = model_class.without_metadata(:plan_requirement)
+      expect(results.size).to be > 0
+    end
+
+    it "excludes settings that have the queried key" do
+      results = model_class.without_metadata(:plan_requirement)
+      expect(results.map(&:name)).not_to include(:premium_mode)
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when no settings lack the key" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "includes settings without the key" do
+        results = model_class.without_metadata(:category)
+        # Some settings don't have category (enterprise_features, basic_features)
+        expect(results.map(&:name)).to include(:enterprise_features, :basic_features)
+      end
+
+      it "excludes settings with the key" do
+        results = model_class.without_metadata(:category)
+        # But settings with category should not be included
+        expect(results.map(&:name)).not_to include(:security_enabled, :analytics_enabled)
+      end
+    end
+  end
+
+  describe ".where_metadata" do
+    describe "with equals: parameter" do
+      it "filters by exact value match" do
+        results = model_class.where_metadata(:tier, equals: "premium")
+        expect(results.map(&:name)).to include(:security_enabled, :premium_mode, :api_access, :enterprise_features)
+      end
+
+      it "filters by exact symbol match" do
+        results = model_class.where_metadata(:tier, equals: "basic")
+        expect(results.map(&:name)).to eq([:basic_features])
+      end
+
+      it "handles nil values" do
+        results = model_class.where_metadata(:nonexistent, equals: nil)
+        # All settings have nil for nonexistent key
+        expect(results.size).to eq(model_class.all_settings_recursive.size)
+      end
+
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when no settings match" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
+        it "returns empty array" do
+          results = model_class.where_metadata(:tier, equals: "nonexistent")
+          expect(results).to be_empty
+        end
+      end
+    end
+
+    describe "with includes: parameter" do
+      it "filters by array inclusion" do
+        results = model_class.where_metadata(:plans, includes: :enterprise)
+        expect(results.map(&:name)).to eq([:enterprise_features])
+      end
+
+      it "handles multiple settings with same included value" do
+        results = model_class.where_metadata(:plans, includes: :professional)
+        expect(results.map(&:name)).to include(:enterprise_features, :basic_features)
+      end
+
+      it "handles non-array values gracefully" do
+        # tier is a string, not an array - should return empty
+        results = model_class.where_metadata(:tier, includes: "premium")
+        expect(results).to be_empty
+      end
+
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when value not in any arrays" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
+        it "returns empty array" do
+          results = model_class.where_metadata(:plans, includes: :nonexistent_plan)
+          expect(results).to be_empty
+        end
+      end
+    end
+
+    describe "with block" do
+      it "filters using custom block logic" do
+        results = model_class.where_metadata do |meta|
+          meta[:tier] == "premium" && meta[:category] == "security"
+        end
+        expect(results.map(&:name)).to eq([:security_enabled])
+      end
+
+      it "passes metadata hash to block" do
+        results = model_class.where_metadata do |meta|
+          meta.is_a?(Hash) && meta[:category] == "analytics"
+        end
+        expect(results.map(&:name)).to eq([:analytics_enabled])
+      end
+
+      it "handles complex conditions" do
+        results = model_class.where_metadata do |meta|
+          meta[:tier] == "premium" && meta.key?(:plan_requirement)
+        end
+        expect(results.map(&:name)).to eq([:premium_mode])
+      end
+
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when block returns false for all settings" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
+        it "returns empty array" do
+          results = model_class.where_metadata { |_meta| false }
+          expect(results).to be_empty
+        end
+      end
+    end
+
+    describe "without parameters" do
+      it "returns all settings" do
+        results = model_class.where_metadata
+        expect(results.size).to eq(model_class.all_settings_recursive.size)
+      end
     end
   end
 end

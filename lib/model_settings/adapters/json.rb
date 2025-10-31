@@ -60,8 +60,11 @@ module ModelSettings
           # Execute before_enable callback
           execute_setting_callbacks(setting_obj, :enable, :before)
 
-          # Set the value
-          public_send("#{setting_name}=", true)
+          # Execute around_enable callback (wraps the value assignment)
+          execute_around_callback(setting_obj, :enable) do
+            # Set the value
+            public_send("#{setting_name}=", true)
+          end
 
           # Execute after_enable callback
           execute_setting_callbacks(setting_obj, :enable, :after)
@@ -75,8 +78,11 @@ module ModelSettings
           # Execute before_disable callback
           execute_setting_callbacks(setting_obj, :disable, :before)
 
-          # Set the value
-          public_send("#{setting_name}=", false)
+          # Execute around_disable callback (wraps the value assignment)
+          execute_around_callback(setting_obj, :disable) do
+            # Set the value
+            public_send("#{setting_name}=", false)
+          end
 
           # Execute after_disable callback
           execute_setting_callbacks(setting_obj, :disable, :after)
@@ -391,8 +397,11 @@ module ModelSettings
             # Execute before_enable callback
             execute_setting_callbacks(child_setting, :enable, :before)
 
-            # Set the value
-            public_send("#{child_name}=", true)
+            # Execute around_enable callback (wraps the value assignment)
+            execute_around_callback(child_setting, :enable) do
+              # Set the value
+              public_send("#{child_name}=", true)
+            end
 
             # Execute after_enable callback
             execute_setting_callbacks(child_setting, :enable, :after)
@@ -405,8 +414,11 @@ module ModelSettings
             # Execute before_disable callback
             execute_setting_callbacks(child_setting, :disable, :before)
 
-            # Set the value
-            public_send("#{child_name}=", false)
+            # Execute around_disable callback (wraps the value assignment)
+            execute_around_callback(child_setting, :disable) do
+              # Set the value
+              public_send("#{child_name}=", false)
+            end
 
             # Execute after_disable callback
             execute_setting_callbacks(child_setting, :disable, :after)

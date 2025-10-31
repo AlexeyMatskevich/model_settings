@@ -76,7 +76,7 @@ User.settings_where(metadata: {tier: "premium"})
 # => [billing_enabled setting]
 ```
 
-### settings_with_metadata_key
+### settings_with_metadata_key / with_metadata
 
 Find settings that have a specific metadata key:
 
@@ -86,6 +86,123 @@ User.settings_with_metadata_key(:rate_limit)
 
 User.settings_with_metadata_key(:category)
 # => [billing_enabled, api_access settings]
+
+# Shorter alias
+User.with_metadata(:rate_limit)
+# => [api_access setting]
+```
+
+### without_metadata
+
+Find settings that **don't** have a specific metadata key:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :documented_feature,
+          metadata: {description: "Feature with docs"}
+
+  setting :undocumented_feature
+          # No description
+end
+
+# Find settings without description
+User.without_metadata(:description)
+# => [undocumented_feature setting]
+
+# Find settings without tier
+User.without_metadata(:tier)
+# => Settings that don't have tier metadata
+```
+
+**Use case:** Find settings that need documentation or categorization.
+
+### where_metadata
+
+Advanced metadata querying with operators:
+
+#### Exact Match (`equals:`)
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :basic_features,
+          metadata: {tier: "basic"}
+
+  setting :premium_features,
+          metadata: {tier: "premium"}
+
+  setting :enterprise_features,
+          metadata: {tier: "enterprise"}
+end
+
+# Find settings with exact tier value
+User.where_metadata(:tier, equals: "premium")
+# => [premium_features setting]
+
+User.where_metadata(:tier, equals: "basic")
+# => [basic_features setting]
+```
+
+#### Array Inclusion (`includes:`)
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :analytics,
+          metadata: {
+            plans: [:professional, :enterprise]
+          }
+
+  setting :advanced_reports,
+          metadata: {
+            plans: [:enterprise]
+          }
+
+  setting :basic_dashboard,
+          metadata: {
+            plans: [:basic, :professional, :enterprise]
+          }
+end
+
+# Find settings available in professional plan
+User.where_metadata(:plans, includes: :professional)
+# => [analytics, basic_dashboard settings]
+
+# Find settings available in enterprise plan
+User.where_metadata(:plans, includes: :enterprise)
+# => [analytics, advanced_reports, basic_dashboard settings]
+```
+
+**Note:** The `includes:` operator only works with array metadata values.
+
+#### Block Filter
+
+```ruby
+# Complex conditions
+User.where_metadata do |meta|
+  meta[:tier] == "premium" && !meta[:deprecated]
+end
+
+# Multiple criteria
+User.where_metadata do |meta|
+  meta[:category] == "billing" && meta[:tier] == "enterprise"
+end
+
+# Check key presence with condition
+User.where_metadata do |meta|
+  meta.key?(:rate_limit) && meta[:rate_limit] > 100
+end
+```
+
+#### No Filter
+
+```ruby
+# Returns all settings (same as all_settings_recursive)
+User.where_metadata
 ```
 
 ### settings_grouped_by_metadata
@@ -287,7 +404,10 @@ end
 |--------|---------|----------|
 | `find_setting` | Single setting | Get specific setting |
 | `settings_by_type` | Array of settings | Filter by storage type |
-| `settings_where` | Array of settings | Filter by metadata |
+| `settings_where` | Array of settings | Filter by exact metadata values |
+| `with_metadata` | Array of settings | Find settings with metadata key |
+| `without_metadata` | Array of settings | Find settings without metadata key |
+| `where_metadata` | Array of settings | Advanced metadata queries (equals, includes, block) |
 | `settings_matching` | Array of settings | Custom filter logic |
 | `root_settings` | Array of settings | Top-level only |
 | `leaf_settings` | Array of settings | Settings without children |

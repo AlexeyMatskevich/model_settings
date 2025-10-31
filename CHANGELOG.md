@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-10-31
+
+### Added
+- **Metadata Query API**: Advanced methods for querying settings by metadata
+  - `with_metadata(key)`: Spec-compliant alias for `settings_with_metadata_key`
+  - `without_metadata(key)`: Find settings WITHOUT a specific metadata key
+  - `where_metadata(key, equals:)`: Filter by exact metadata value match
+  - `where_metadata(key, includes:)`: Filter by array metadata inclusion
+  - `where_metadata { |meta| ... }`: Custom block filters with complex logic
+  - `where_metadata`: Returns all settings (no filter)
+  - 21 comprehensive RSpec examples
+  - Full backward compatibility with existing methods
+
+- **Setting Helper Methods**: New metadata query helpers on Setting class
+  - `has_metadata?(key)`: Check if setting has metadata key (supports symbol/string)
+  - `metadata_value(key)`: Get metadata value (supports symbol/string keys)
+  - `metadata_includes?(key, value)`: Check if array metadata includes value
+  - Used internally by query methods for cleaner implementation
+
+- **Around Callbacks**: Wrap setting operations with timing, transactions, or abortion
+  - `around_enable`: Wraps enable operation
+  - `around_disable`: Wraps disable operation
+  - `around_change`: Wraps any value change
+  - Must call `yield` to execute the wrapped operation
+  - Can abort operations by not yielding
+  - Perfect for timing measurements, transaction wrapping, conditional execution
+  - Integrated into all adapters (Column, JSON, StoreModel)
+  - 8 comprehensive RSpec examples covering Symbol callbacks, abort scenarios, integration tests
+
+### Documentation
+- **Updated `docs/core/queries.md`**:
+  - Added `with_metadata`, `without_metadata`, `where_metadata` documentation
+  - Detailed examples for `equals:`, `includes:`, and block filters
+  - Use cases and best practices
+  - Updated Summary table with new methods
+
+- **Updated `docs/core/callbacks.md`**:
+  - Added comprehensive "Around Callbacks" section
+  - Basic usage with timing example
+  - Aborting operations pattern
+  - Transaction wrapping examples
+  - Error handling in around callbacks
+  - Multiple around callbacks limitation (only first executes)
+  - Updated execution order diagram with around callbacks
+  - Updated Summary table with around callback types
+
+- **Created `docs/architecture/metadata_query_api.md`**:
+  - Complete design document for Metadata Query API
+  - API completeness matrix
+  - Implementation details
+  - Performance considerations
+  - Migration path for existing code
+  - Non-goals and future enhancements
+
+### Changed
+- Callback execution order now includes around callbacks wrapping the operation
+- Query module enhanced with spec-compliant metadata query methods
+- All adapters (Column, JSON, StoreModel) now support around callbacks
+
+### Test Coverage
+- 945 total examples (up from 916)
+- +29 new tests (21 query tests + 8 around callback tests)
+- All tests passing with 100% backward compatibility
+
 ## [0.5.0] - 2025-10-31
 
 ### Added

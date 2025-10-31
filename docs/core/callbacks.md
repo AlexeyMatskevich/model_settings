@@ -7,10 +7,13 @@ ModelSettings provides a comprehensive callback system for hooking into setting 
 | Callback | When It Runs | Use Case |
 |----------|--------------|----------|
 | `before_enable` | Before setting changes to `true` | Prepare resources |
+| `around_enable` | **Wraps** setting change to `true` | Measure time, transactions |
 | `after_enable` | After setting changes to `true` | Send notifications |
 | `before_disable` | Before setting changes to `false` | Check dependencies |
+| `around_disable` | **Wraps** setting change to `false` | Measure time, transactions |
 | `after_disable` | After setting changes to `false` | Cleanup resources |
 | `before_change` | Before any value change | Audit logging |
+| `around_change` | **Wraps** any value change | Measure time, transactions |
 | `after_change` | After any value change | Sync to external services |
 | `after_change_commit` | After database commit | Send emails, queue jobs |
 
@@ -108,6 +111,186 @@ end
 def notify_admin
   AdminMailer.api_access_enabled(self).deliver_later
 end
+```
+
+## Around Callbacks
+
+**Around callbacks wrap the setting operation** and must call `yield` to execute it. This allows you to measure timing, wrap in transactions, or abort operations.
+
+### Basic Usage
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :expensive_feature,
+          type: :column,
+          around_enable: :measure_enable_time
+
+  private
+
+  def measure_enable_time
+    start_time = Time.current
+    yield  # Must yield to actually enable the setting
+    duration = Time.current - start_time
+    Rails.logger.info("Feature enabled in #{duration}s")
+  end
+end
+
+user.expensive_feature_enable!
+# Log output: "Feature enabled in 0.023s"
+```
+
+### Aborting Operations
+
+Around callbacks can **abort the operation by not yielding**:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :premium_feature,
+          type: :column,
+          around_enable: :check_subscription
+
+  private
+
+  def check_subscription
+    unless has_active_subscription?
+      Rails.logger.warn("Cannot enable premium feature: no active subscription")
+      return  # Don't yield - operation aborted
+    end
+
+    yield  # Proceed with enabling
+  end
+end
+
+user.premium_feature_enable!
+user.premium_feature  # => false (not enabled because no subscription)
+```
+
+### Transaction Wrapping
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :enterprise_mode,
+          type: :column,
+          around_enable: :wrap_in_transaction
+
+  private
+
+  def wrap_in_transaction
+    ActiveRecord::Base.transaction do
+      # Enable additional features
+      update!(plan: "enterprise", seats: 100)
+
+      yield  # Enable the setting
+
+      # Log the change
+      AuditLog.create!(organization: self, action: "enterprise_enabled")
+    end
+  end
+end
+```
+
+### Timing and Logging
+
+```ruby
+class Callcenter < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :ai_transcription,
+          type: :store_model,
+          storage: {column: :ai_settings},
+          around_enable: :log_with_timing
+
+  private
+
+  def log_with_timing
+    Rails.logger.info("[#{id}] Enabling AI transcription...")
+    start = Time.current
+
+    yield  # Enable the feature
+
+    elapsed = ((Time.current - start) * 1000).round(2)
+    Rails.logger.info("[#{id}] AI transcription enabled (#{elapsed}ms)")
+  end
+end
+```
+
+### Error Handling in Around Callbacks
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :api_access,
+          type: :column,
+          around_enable: :safe_enable
+
+  private
+
+  def safe_enable
+    begin
+      verify_api_quota!
+      yield  # Enable if quota check passed
+      notify_success
+    rescue QuotaExceededError => e
+      Rails.logger.error("API enable failed: #{e.message}")
+      # Don't yield - operation aborted
+    end
+  end
+end
+```
+
+### Multiple Around Callbacks
+
+**Note:** Only the **first** around callback is executed. Around callbacks don't chain like before/after callbacks.
+
+```ruby
+# ❌ Only measure_time will run
+setting :feature,
+        around_enable: [:measure_time, :wrap_transaction]
+
+# ✅ Use nested logic instead
+def measure_and_wrap
+  measure_time do
+    wrap_transaction do
+      yield
+    end
+  end
+end
+```
+
+### Execution Order with Around Callbacks
+
+```
+1. before_change           # If value changed
+2. before_enable/disable   # If changing to true/false
+3. around_enable/disable   # ← Wraps steps 4-6
+   ├─ 4. Set new value
+   ├─ 5. after_enable/disable
+   └─ 6. after_change
+7. Database save
+8. after_change_commit
+```
+
+**Example:**
+
+```ruby
+setting :premium,
+        before_enable: :prepare,
+        around_enable: :wrap,
+        after_enable: :notify
+
+# Execution order:
+# 1. prepare() runs
+# 2. wrap() starts
+# 3. yield in wrap() → premium = true
+# 4. notify() runs
+# 5. wrap() ends
 ```
 
 ## after_change_commit
@@ -343,15 +526,20 @@ end
 | Callback | Runs | Best For |
 |----------|------|----------|
 | `before_enable` | Before `true` | Preparation, validation |
+| `around_enable` | **Wraps** `true` | Timing, transactions, aborting |
 | `after_enable` | After `true` | Notifications, logging |
 | `before_disable` | Before `false` | Dependency checks |
+| `around_disable` | **Wraps** `false` | Timing, transactions, aborting |
 | `after_disable` | After `false` | Cleanup |
 | `before_change` | Before any change | Audit logging |
+| `around_change` | **Wraps** any change | Timing, transactions, aborting |
 | `after_change` | After any change | Internal state updates |
 | `after_change_commit` | After DB commit | External APIs, emails, jobs |
 
 **Key Points**:
 - Callbacks run in predictable order
+- **Around callbacks must `yield`** to execute the operation
+- Around callbacks can abort by not yielding
 - Use `after_change_commit` for side effects
 - Exceptions roll back the transaction
 - Keep callbacks fast - queue jobs for slow work

@@ -38,7 +38,7 @@ module ModelSettings
         hash[:description] = setting.description if setting.description
 
         # Authorization
-        if auth = format_authorization(setting)
+        if (auth = format_authorization(setting))
           hash[:authorization] = auth
         end
 
