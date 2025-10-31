@@ -40,14 +40,14 @@ module ModelSettings
           # Execute before_enable callback
           execute_setting_callbacks(setting_obj, :enable, :before)
 
-          # Execute around_enable callback (wraps the value assignment)
+          # Execute around_enable callback (wraps the value assignment AND after callbacks)
           execute_around_callback(setting_obj, :enable) do
             # Set the value
             public_send("#{setting_name}=", true)
-          end
 
-          # Execute after_enable callback
-          execute_setting_callbacks(setting_obj, :enable, :after)
+            # Execute after_enable callback (inside around block)
+            execute_setting_callbacks(setting_obj, :enable, :after)
+          end
 
           # Track for after_commit if needed
           track_setting_change_for_commit(setting_obj) if setting_obj.options[:after_change_commit]
@@ -58,14 +58,14 @@ module ModelSettings
           # Execute before_disable callback
           execute_setting_callbacks(setting_obj, :disable, :before)
 
-          # Execute around_disable callback (wraps the value assignment)
+          # Execute around_disable callback (wraps the value assignment AND after callbacks)
           execute_around_callback(setting_obj, :disable) do
             # Set the value
             public_send("#{setting_name}=", false)
-          end
 
-          # Execute after_disable callback
-          execute_setting_callbacks(setting_obj, :disable, :after)
+            # Execute after_disable callback (inside around block)
+            execute_setting_callbacks(setting_obj, :disable, :after)
+          end
 
           # Track for after_commit if needed
           track_setting_change_for_commit(setting_obj) if setting_obj.options[:after_change_commit]

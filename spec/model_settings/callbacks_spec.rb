@@ -514,6 +514,101 @@ RSpec.describe ModelSettings::Callbacks do
     end
   end
 
+  describe "callback execution order" do
+    let(:model_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ExecutionOrderModel"
+        end
+
+        include ModelSettings::DSL
+
+        attr_accessor :execution_log
+
+        setting :feature,
+          type: :column,
+          default: false,
+          before_enable: :log_before_enable,
+          around_enable: :log_around_enable,
+          after_enable: :log_after_enable
+
+        def log_before_enable
+          self.execution_log ||= []
+          self.execution_log << :before_enable
+        end
+
+        def log_around_enable
+          self.execution_log ||= []
+          self.execution_log << :around_enable_start
+          yield
+          self.execution_log << :around_enable_end
+        end
+
+        def log_after_enable
+          self.execution_log ||= []
+          self.execution_log << :after_enable
+        end
+      end
+    end
+
+    let(:instance) { model_class.create! }
+
+    it "executes enable callbacks in correct order" do
+      instance.execution_log = []
+
+      instance.feature_enable!
+
+      expect(instance.execution_log).to eq([
+        :before_enable,
+        :around_enable_start,
+        :after_enable,
+        :around_enable_end
+      ])
+    end
+
+    it "includes value assignment between around callbacks" do
+      instance.execution_log = []
+
+      instance.feature_enable!
+
+      aggregate_failures do
+        expect(instance.feature).to be true
+        expect(instance.execution_log.index(:around_enable_start)).to be < instance.execution_log.index(:around_enable_end)
+      end
+    end
+
+    context "when around callback aborts by not yielding" do
+      before do
+        model_class.class_eval do
+          def log_around_enable
+            self.execution_log ||= []
+            self.execution_log << :around_enable_start
+            # Don't yield - abort operation
+          end
+        end
+      end
+
+      it "stops execution and does NOT change value" do
+        instance.execution_log = []
+
+        instance.feature_enable!
+
+        aggregate_failures do
+          expect(instance.feature).to be false
+          expect(instance.execution_log).to eq([:before_enable, :around_enable_start])
+        end
+      end
+
+      it "does NOT execute after_enable callback" do
+        instance.execution_log = []
+
+        instance.feature_enable!
+
+        expect(instance.execution_log).not_to include(:after_enable)
+      end
+    end
+  end
+
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "integration with ActiveRecord" do
     context "when after_commit hook fires" do

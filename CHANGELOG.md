@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated into all adapters (Column, JSON, StoreModel)
   - 8 comprehensive RSpec examples covering Symbol callbacks, abort scenarios, integration tests
 
+- **Callback Execution Order Tests**: Comprehensive test coverage for callback execution flow
+  - Test correct execution order: before → around_start → after → around_end
+  - Test around callback abort scenarios (not yielding stops execution)
+  - Test value assignment happens between around callback wrapping
+  - 4 comprehensive RSpec examples validating execution order guarantees
+
 ### Documentation
 - **Updated `docs/core/queries.md`**:
   - Added `with_metadata`, `without_metadata`, `where_metadata` documentation
@@ -65,10 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Callback execution order now includes around callbacks wrapping the operation
 - Query module enhanced with spec-compliant metadata query methods
 - All adapters (Column, JSON, StoreModel) now support around callbacks
+- Column adapter: `after_enable`/`after_disable` callbacks moved inside around callback block
+  - Ensures after callbacks only execute if around callback yields
+  - Enables proper abort behavior when around callback doesn't yield
 
 ### Test Coverage
-- 945 total examples (up from 916)
-- +29 new tests (21 query tests + 8 around callback tests)
+- 955 total examples (up from 916)
+- +39 new tests (21 query + 8 around callback + 10 refactored + 4 execution order tests)
 - All tests passing with 100% backward compatibility
 
 ## [0.5.0] - 2025-10-31
