@@ -5,7 +5,7 @@ require "store_model"
 
 # Integration tests that verify all adapters implement the same contract
 # using shared examples
-# rubocop:disable RSpec/DescribeClass
+# rubocop:disable RSpec/DescribeClass, RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe "Adapter shared behavior" do
   # Common setting name used across all adapters
   let(:setting_name) { :enabled }
@@ -18,7 +18,7 @@ RSpec.describe "Adapter shared behavior" do
     it_behaves_like "an adapter with persistence"
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ModelSettings::Adapters::Column do
     let(:model_class) do
       Class.new(TestModel) do
@@ -39,9 +39,9 @@ RSpec.describe "Adapter shared behavior" do
 
     it_behaves_like "adapter contract"
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ModelSettings::Adapters::Json do
     before do
       # Table already exists from active_record.rb
@@ -66,9 +66,9 @@ RSpec.describe "Adapter shared behavior" do
 
     it_behaves_like "adapter contract"
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ModelSettings::Adapters::StoreModel do
     before do
       # Table already exists from active_record.rb
@@ -100,6 +100,6 @@ RSpec.describe "Adapter shared behavior" do
 
     it_behaves_like "adapter contract"
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end
-# rubocop:enable RSpec/DescribeClass
+# rubocop:enable RSpec/DescribeClass, RSpecGuide/MinimumBehavioralCoverage

@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Query do
   let(:model_class) do
     Class.new(TestModel) do
@@ -53,9 +54,14 @@ RSpec.describe ModelSettings::Query do
         validate_with: :check_api_quota,
         metadata: {category: "api", tier: "premium"}
 
-      def check_email; end
-      def notify_enabled; end
-      def check_api_quota; end
+      def check_email
+      end
+
+      def notify_enabled
+      end
+
+      def check_api_quota
+      end
     end
   end
 
@@ -67,6 +73,7 @@ RSpec.describe ModelSettings::Query do
       end
 
       include ModelSettings::DSL
+
       setting :enabled, type: :column
     end
   end
@@ -82,14 +89,18 @@ RSpec.describe ModelSettings::Query do
       expect(results.map(&:name)).to eq([:analytics_enabled])
     end
 
-    context "but when metadata does NOT match" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when metadata does NOT match" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         results = model_class.settings_where(metadata: {category: "nonexistent"})
         expect(results).to be_empty
       end
     end
 
-    context "but when no metadata provided" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when no metadata provided" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns all settings" do
         results = model_class.settings_where(metadata: {})
         expect(results.size).to eq(model_class.all_settings_recursive.size)
@@ -108,7 +119,9 @@ RSpec.describe ModelSettings::Query do
       end
     end
 
-    context "but when key does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when key does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         results = model_class.settings_with_metadata_key(:nonexistent_key)
         expect(results).to be_empty
@@ -127,7 +140,9 @@ RSpec.describe ModelSettings::Query do
       expect(results.map(&:name)).to eq([:features])
     end
 
-    context "but when type does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when type does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array for :store_model type" do
         results = model_class.settings_by_type(:store_model)
         expect(results).to be_empty
@@ -151,7 +166,9 @@ RSpec.describe ModelSettings::Query do
       expect(results.map(&:name)).to eq([:email_enabled])
     end
 
-    context "but when callback type does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when callback type does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         results = model_class.settings_with_callbacks(:nonexistent_callback)
         expect(results).to be_empty
@@ -165,7 +182,9 @@ RSpec.describe ModelSettings::Query do
       expect(results.map(&:name)).to eq([:api_access])
     end
 
-    context "but when no settings have validation" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when no settings have validation" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         expect(simple_model.settings_with_validation).to be_empty
       end
@@ -188,7 +207,9 @@ RSpec.describe ModelSettings::Query do
       end
     end
 
-    context "but when default value does NOT match" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when default value does NOT match" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         results = model_class.settings_with_default(:nonexistent_default)
         expect(results).to be_empty
@@ -208,7 +229,9 @@ RSpec.describe ModelSettings::Query do
       end
     end
 
-    context "but when metadata key does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when metadata key does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "places all settings in :ungrouped group" do
         results = model_class.settings_grouped_by_metadata(:nonexistent_key)
 
@@ -233,7 +256,9 @@ RSpec.describe ModelSettings::Query do
       expect(results.map(&:name)).to include(:security_enabled, :premium_mode, :api_access)
     end
 
-    context "but when block returns false for all settings" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when block returns false for all settings" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         results = model_class.settings_matching { |_s| false }
         expect(results).to be_empty
@@ -241,6 +266,7 @@ RSpec.describe ModelSettings::Query do
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".settings_count" do
     it "returns total count with no criteria" do
       count = model_class.settings_count
@@ -282,3 +308,4 @@ RSpec.describe ModelSettings::Query do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

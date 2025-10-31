@@ -13,12 +13,13 @@ ModelSettings supports three storage backends: Column, JSON/JSONB, and StoreMode
 | **Dirty Tracking** | Native ActiveRecord | Custom implementation | StoreModel integration |
 | **Best For** | Feature flags, individual toggles | Related settings, preferences | Complex nested configs |
 
-## Column Adapter
+## Adapter Types
+
+### Column Adapter
 
 Store each setting as a separate database column. Best for feature flags and settings that are frequently queried individually.
 
-### Basic Usage
-
+**Quick Example:**
 ```ruby
 class User < ApplicationRecord
   include ModelSettings::DSL
@@ -28,310 +29,172 @@ class User < ApplicationRecord
 end
 ```
 
-### Migration
+✅ **Use when:** Settings are queried individually, need indexes, want explicit schema
 
-```ruby
-class AddSettingsToUsers < ActiveRecord::Migration[7.0]
-  def change
-    add_column :users, :premium, :boolean, default: false, null: false
-    add_column :users, :notifications_enabled, :boolean, default: true, null: false
-
-    # Add index for frequently queried settings
-    add_index :users, :premium
-  end
-end
-```
-
-### Helper Methods
-
-Column adapter automatically generates helper methods for boolean settings:
-
-```ruby
-user = User.create!
-
-# Getters/setters
-user.premium  # => false
-user.premium = true
-
-# Helper methods
-user.premium_enable!      # Set to true and save
-user.premium_disable!     # Set to false and save
-user.premium_toggle!      # Toggle and save
-
-# Query methods
-user.premium_enabled?     # => true
-user.premium_disabled?    # => false
-
-# Dirty tracking
-user.premium = false
-user.premium_changed?     # => true
-user.premium_was          # => true
-user.premium_change       # => [true, false]
-```
-
-### When to Use Column Adapter
-
-✅ **Use when:**
-- Settings are queried individually in SQL (`WHERE premium = true`)
-- You need database indexes on settings
-- Settings are independent (not grouped)
-- You want explicit schema
-
-❌ **Avoid when:**
-- You have many related settings (bloats table with columns)
-- Schema changes frequently
-- Settings are always read/written together
+📖 **[Full Column Adapter Documentation →](adapters/column.md)**
 
 ---
 
-## JSON Adapter
+### JSON Adapter
 
 Store multiple settings in a single JSONB column. Best for related settings that are read and written together.
 
-### Basic Usage
-
+**Quick Example:**
 ```ruby
 class User < ApplicationRecord
   include ModelSettings::DSL
 
-  # Multiple settings in one JSON column
   setting :preferences, type: :json, storage: {column: :prefs_data} do
     setting :email_notifications, default: true
-    setting :sms_notifications, default: false
     setting :dark_mode, default: false
   end
 end
 ```
 
-### Migration
+✅ **Use when:** Related settings, flexible schema, many settings, using PostgreSQL JSONB
+
+**Special Feature: JSON Array Membership** - Store settings as string values in a JSON array for compact feature flags:
 
 ```ruby
-class AddPreferencesToUsers < ActiveRecord::Migration[7.0]
-  def change
-    # JSONB column with default empty hash
-    add_column :users, :prefs_data, :jsonb, default: {}, null: false
+setting :feature_a, type: :json, storage: {column: :features, array: true}
+setting :feature_b, type: :json, storage: {column: :features, array: true}
 
-    # GIN index for JSONB queries (PostgreSQL)
-    add_index :users, :prefs_data, using: :gin
-  end
-end
+org.feature_a = true
+org.features  # => ["feature_a"]
 ```
 
-### Usage
-
-```ruby
-user = User.create!
-
-# Access nested settings directly
-user.email_notifications = false
-user.dark_mode = true
-user.save!
-
-# Helper methods work too
-user.sms_notifications_enable!
-
-# All stored in one JSONB column
-user.prefs_data
-# => {"email_notifications" => false, "sms_notifications" => false, "dark_mode" => true}
-
-# Dirty tracking
-user.email_notifications = true
-user.email_notifications_changed?  # => true
-```
-
-### JSON Arrays
-
-Store array values in JSON columns:
-
-```ruby
-class User < ApplicationRecord
-  include ModelSettings::DSL
-
-  setting :allowed_ips,
-          type: :json,
-          storage: {column: :security_settings},
-          array: true,
-          default: []
-
-  setting :tags,
-          type: :json,
-          storage: {column: :metadata},
-          array: true
-end
-
-# Usage
-user = User.create!
-user.allowed_ips = ["192.168.1.1", "10.0.0.1"]
-user.tags = ["premium", "verified"]
-user.save!
-
-# Array operations trigger dirty tracking
-user.allowed_ips << "172.16.0.1"
-user.allowed_ips_changed?  # => true
-```
-
-### Multiple JSON Columns
-
-You can use multiple JSON columns in one model:
-
-```ruby
-class User < ApplicationRecord
-  include ModelSettings::DSL
-
-  # Different groups in different columns
-  setting :notifications, type: :json, storage: {column: :notification_settings} do
-    setting :email, default: true
-    setting :sms, default: false
-  end
-
-  setting :privacy, type: :json, storage: {column: :privacy_settings} do
-    setting :public_profile, default: true
-    setting :show_email, default: false
-  end
-end
-```
-
-### When to Use JSON Adapter
-
-✅ **Use when:**
-- Settings are related and read/written together
-- You want flexible schema (easy to add/remove settings)
-- You have many settings (avoids column bloat)
-- You're using PostgreSQL with JSONB
-
-❌ **Avoid when:**
-- You need to query individual settings in SQL frequently
-- You need indexes on specific settings
-- You're using databases without good JSON support
+📖 **[Full JSON Adapter Documentation →](adapters/json.md)**
 
 ---
 
-## StoreModel Adapter
+### StoreModel Adapter
 
 Use [StoreModel](https://github.com/DmitryTsepelev/store_model) for complex nested settings with type casting and validation.
 
-### Setup
-
-Add StoreModel to your Gemfile:
-
+**Quick Example:**
 ```ruby
-gem 'store_model'
-```
-
-### Basic Usage
-
-```ruby
-# Define StoreModel class
 class NotificationSettings
   include StoreModel::Model
 
   attribute :email, :boolean, default: true
-  attribute :sms, :boolean, default: false
-  attribute :push, :boolean, default: false
   attribute :frequency, :string, default: "daily"
 end
 
 class User < ApplicationRecord
   include ModelSettings::DSL
 
-  # Register StoreModel attribute
   attribute :notification_prefs, NotificationSettings.to_type
 
-  # Define settings using StoreModel storage
   setting :email_notifications,
           type: :store_model,
           storage: {column: :notification_prefs}
-
-  setting :sms_notifications,
-          type: :store_model,
-          storage: {column: :notification_prefs}
 end
 ```
 
-### Migration
+✅ **Use when:** Need type casting, StoreModel validations, complex nested structures
+
+📖 **[Full StoreModel Adapter Documentation →](adapters/store_model.md)**
+
+---
+
+## Common Features
+
+All adapters share these core features regardless of storage backend.
+
+### Helper Methods
+
+ModelSettings automatically generates helper methods for boolean settings:
 
 ```ruby
-class AddNotificationPrefsToUsers < ActiveRecord::Migration[7.0]
-  def change
-    add_column :users, :notification_prefs, :jsonb, default: {}, null: false
-  end
-end
-```
-
-### Usage
-
-```ruby
-user = User.create!(notification_prefs: NotificationSettings.new)
-
-# Type casting works automatically
-user.email_notifications = true
-user.email_notifications  # => true (boolean, not string)
-
-# StoreModel's dirty tracking
-user.email_notifications = false
-user.email_notifications_changed?  # => true
-
-# Access StoreModel object directly
-user.notification_prefs
-# => #<NotificationSettings email=false sms=false push=false frequency="daily">
-
-# StoreModel validations work
-user.notification_prefs.frequency = "invalid"
-user.valid?  # StoreModel validations run
-```
-
-### Complex Example
-
-```ruby
-class AiSettings
-  include StoreModel::Model
-
-  attribute :transcription, :boolean, default: false
-  attribute :sentiment, :boolean, default: false
-  attribute :rate_limit, :integer, default: 100
-  attribute :language, :string, default: "en"
-
-  validates :rate_limit, numericality: {greater_than: 0, less_than_or_equal_to: 1000}
-  validates :language, inclusion: {in: %w[en es fr de]}
-end
-
-class Callcenter < ApplicationRecord
+class User < ApplicationRecord
   include ModelSettings::DSL
-
-  attribute :ai_settings, AiSettings.to_type
-
-  setting :transcription,
-          type: :store_model,
-          storage: {column: :ai_settings}
-
-  setting :sentiment,
-          type: :store_model,
-          storage: {column: :ai_settings}
+  setting :premium, type: :column, default: false
 end
 
-callcenter = Callcenter.create!(ai_settings: AiSettings.new)
-callcenter.transcription = true
-callcenter.ai_settings.rate_limit = 500
-callcenter.save!
+user = User.create!
 
-# StoreModel validations
-callcenter.ai_settings.rate_limit = 2000
-callcenter.valid?  # => false
-callcenter.errors[:ai_settings]  # => ["Rate limit must be less than or equal to 1000"]
+# Getters/setters
+user.premium          # => false
+user.premium = true
+
+# Action methods (change + save)
+user.premium_enable!   # Set to true and save!
+user.premium_disable!  # Set to false and save!
+user.premium_toggle!   # Toggle and save!
+
+# Query methods
+user.premium_enabled?  # => true
+user.premium_disabled? # => false
 ```
 
-### When to Use StoreModel Adapter
+**Available for:** Column, JSON, StoreModel (all adapters)
 
-✅ **Use when:**
-- You need type casting (integers, dates, enums)
-- You want StoreModel's validation framework
-- You have complex nested structures
-- You need strong typing
+**Note:** Helper methods work the same regardless of storage backend. A JSON-stored setting has the same `_enable!`, `_disable!`, `_toggle!` methods as a column-stored setting.
 
-❌ **Avoid when:**
-- Simple boolean settings (Column or JSON is simpler)
-- You don't need type casting or validations
-- Extra dependency is a concern
+### Dirty Tracking
+
+All adapters provide full dirty tracking support:
+
+```ruby
+user = User.create!(premium: false)
+
+# Make a change
+user.premium = true
+
+# Check if changed
+user.premium_changed?       # => true
+user.premium_was            # => false (previous value)
+user.premium_change         # => [false, true] (from → to)
+user.changes                # => {"premium" => [false, true]}
+
+# Reset changes
+user.restore_premium!       # Restore to original value
+user.premium                # => false
+
+# After save
+user.save!
+user.premium_changed?       # => false (no pending changes)
+```
+
+**Available for:** Column, JSON, StoreModel (all adapters)
+
+**Implementation:**
+- **Column**: Native ActiveRecord dirty tracking
+- **JSON**: Custom dirty tracking (tracks JSON column changes)
+- **StoreModel**: StoreModel's built-in dirty tracking
+
+### Validation
+
+All boolean settings are validated by default:
+
+```ruby
+user.premium = "not_a_boolean"
+user.valid?  # => false
+user.errors[:premium]  # => ["must be a boolean"]
+
+# Only true, false, or nil allowed
+user.premium = true   # ✅ Valid
+user.premium = false  # ✅ Valid
+user.premium = nil    # ✅ Valid
+user.premium = "yes"  # ❌ Invalid
+user.premium = 1      # ❌ Invalid
+```
+
+**Available for:** Column, JSON, StoreModel (all adapters)
+
+**Custom validation:** Add your own validators using `validate_with`:
+
+```ruby
+setting :premium,
+        type: :column,
+        validate_with: :check_premium_eligibility
+
+def check_premium_eligibility
+  errors.add(:premium, "requires verified email") unless email_verified?
+end
+```
+
+See [Validation Guide](validation.md) for more details.
 
 ---
 
@@ -519,6 +382,18 @@ User.find_each do |user|
 end
 ```
 
+**JSON Array with array_value:**
+```ruby
+# No data migration needed! Use array_value to point to old name
+setting :new_feature_name,
+        type: :json,
+        storage: {
+          column: :preferences,
+          array: true,
+          array_value: "old_feature"  # Points to old value in array
+        }
+```
+
 ### Migrating Column → JSON
 
 ```ruby
@@ -546,10 +421,13 @@ end
 
 ## Related Documentation
 
-- [Dependencies](dependencies.md) - Cascades and syncs work across storage types
-- [Validation](validation.md) - Built-in boolean validation for all adapters
-- [Callbacks](callbacks.md) - Callbacks work with all adapters
-- [Settings Inheritance](inheritance.md) - Inheritance works with all storage types
+- **[Column Adapter](adapters/column.md)** - Detailed column adapter documentation
+- **[JSON Adapter](adapters/json.md)** - Detailed JSON adapter documentation with JSON Array Membership
+- **[StoreModel Adapter](adapters/store_model.md)** - Detailed StoreModel adapter documentation
+- **[Dependencies](dependencies.md)** - Cascades and syncs work across storage types
+- **[Validation](validation.md)** - Built-in boolean validation for all adapters
+- **[Callbacks](callbacks.md)** - Callbacks work with all adapters
+- **[Settings Inheritance](inheritance.md)** - Inheritance works with all storage types
 
 ---
 
@@ -560,4 +438,4 @@ end
 | Individual queries | Related settings | Type casting needed |
 | Need indexes | Flexible schema | Validations needed |
 | Explicit schema | Many settings | Complex nested objects |
-| Simple toggles | Bulk read/write | Strong typing required |
+| Independent settings | Bulk read/write | Strong typing required |

@@ -7,12 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-10-31
+
 ### Added
-- Comprehensive documentation structure in `docs/` directory
-  - Getting Started guide
-  - Migration guide from boolean columns, JSON, and feature flags
-  - Documentation index and navigation
-  - Documentation development plan
+- **JSON Array Membership Pattern**: Store settings as string values in JSON arrays
+  - New `array: true` storage option for JSON settings
+  - Getter returns `true` if value is in array, `false` otherwise
+  - Setter adds/removes value from array
+  - Custom array values via `array_value` option (for legacy compatibility and renaming)
+  - Full dirty tracking support (`_changed?`, `_was`, `_change`)
+  - Helper methods (`enable!`, `disable!`) work seamlessly
+  - Multiple settings can share the same array column
+  - Automatic array type validation
+  - 24 comprehensive RSpec examples
+  - Perfect for feature flags and permission management
+
+- **Array Type Validator**: New validator for ensuring array types
+  - `validates :column, array_type: true` syntax
+  - Allows `nil` values
+  - Rejects non-array types with "must be an array" error message
+  - 13 comprehensive RSpec examples
+
+### Documentation
+- Added JSON Array Membership section to README with complete examples
+- Added comprehensive Array Membership Pattern section to `docs/core/adapters.md`
+  - Basic usage and migration examples
+  - Custom array values for legacy compatibility
+  - Migration guide for renaming settings
+  - Multiple settings sharing same array
+  - Validation examples
+  - When to use / when to avoid guidance
+
+### Changed
+- JSON adapter now detects and handles `array: true` storage option
+- JSON adapter validates array columns automatically (no duplicate validations)
 
 ## [0.4.0] - 2025-10-31
 

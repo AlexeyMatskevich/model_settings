@@ -57,7 +57,7 @@ module ModelSettings
             }
           end
 
-          super(name, **options, &block)
+          super
         end
 
         # Get all settings viewable by a specific role

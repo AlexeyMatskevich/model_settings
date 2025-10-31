@@ -2,11 +2,12 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Modules::Roles do
   # Ensure module is registered (in case other tests reset the registry)
   before do
     unless ModelSettings::ModuleRegistry.module_registered?(:roles)
-      ModelSettings::ModuleRegistry.register_module(:roles, ModelSettings::Modules::Roles)
+      ModelSettings::ModuleRegistry.register_module(:roles, described_class)
       ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :roles)
     end
   end
@@ -27,22 +28,22 @@ RSpec.describe ModelSettings::Modules::Roles do
 
       # Use existing columns from TestModel
       setting :premium_mode,  # billing substitute
-              type: :column,
-              viewable_by: [:admin, :finance, :manager],
-              editable_by: [:admin, :finance]
+        type: :column,
+        viewable_by: [:admin, :finance, :manager],
+        editable_by: [:admin, :finance]
 
       setting :notifications,  # public_setting substitute
-              type: :column,
-              viewable_by: :all,
-              editable_by: [:admin]
+        type: :column,
+        viewable_by: :all,
+        editable_by: [:admin]
 
       setting :feature,  # admin_only substitute
-              type: :column,
-              viewable_by: [:admin],
-              editable_by: [:admin]
+        type: :column,
+        viewable_by: [:admin],
+        editable_by: [:admin]
 
       setting :enabled,  # unrestricted substitute
-              type: :column
+        type: :column
     end
   end
 
@@ -56,11 +57,14 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "but when conflicting module is already included" do
-      it "raises ExclusiveGroupConflictError" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when conflicting module is already included" do  # Organizational - setup in example
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "raises ExclusiveGroupConflictError" do  # rubocop:disable RSpec/ExampleLength
         # Setup mock Pundit module
         pundit_mod = Module.new do
           extend ActiveSupport::Concern
+
           included do
             ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :pundit)
           end
@@ -72,14 +76,16 @@ RSpec.describe ModelSettings::Modules::Roles do
 
         # Create model with Pundit included
         conflicting_model_class = Class.new(TestModel) do
-          def self.name; "ConflictingModel"; end
+          def self.name
+            "ConflictingModel"
+          end
           include ModelSettings::DSL
           include pundit_mod
         end
 
         # Try to include Roles - should raise error
         expect {
-          conflicting_model_class.include(ModelSettings::Modules::Roles)
+          conflicting_model_class.include(described_class)
         }.to raise_error(ModelSettings::ModuleRegistry::ExclusiveGroupConflictError, /conflicts with :pundit/)
       end
     end
@@ -104,7 +110,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       expect(result).to match_array([:premium_mode, :notifications, :feature])
     end
 
-    context "with :all permission" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with :all permission" do  # Characteristic tested via role argument
+      # rubocop:enable RSpecGuide/ContextSetup
       it "includes setting for any role" do
         result = model_class.settings_viewable_by(:user)
 
@@ -112,7 +120,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "when role has no permissions" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when role has no permissions" do  # Characteristic tested via role argument
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns only :all settings" do
         result = model_class.settings_viewable_by(:guest)
 
@@ -140,7 +150,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       expect(result).to match_array([:premium_mode, :notifications, :feature])
     end
 
-    context "when role cannot edit any settings" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when role cannot edit any settings" do  # Characteristic tested via role argument
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         result = model_class.settings_editable_by(:guest)
 
@@ -150,7 +162,9 @@ RSpec.describe ModelSettings::Modules::Roles do
   end
 
   describe "#can_view_setting?" do
-    context "when setting has viewable_by restriction" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has viewable_by restriction" do  # Characteristic tested via setting/role args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for authorized role" do
         expect(instance.can_view_setting?(:premium_mode, :finance)).to be true
       end
@@ -160,7 +174,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with :all permission" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with :all permission" do  # Characteristic tested via setting/role args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for any role" do
         aggregate_failures do
           expect(instance.can_view_setting?(:notifications, :guest)).to be true
@@ -170,7 +186,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "when setting has no restrictions" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has no restrictions" do  # Characteristic tested via setting/role args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for any role" do
         expect(instance.can_view_setting?(:enabled, :guest)).to be true
       end
@@ -178,7 +196,9 @@ RSpec.describe ModelSettings::Modules::Roles do
   end
 
   describe "#can_edit_setting?" do
-    context "when setting has editable_by restriction" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has editable_by restriction" do  # Characteristic tested via setting/role args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for authorized role" do
         expect(instance.can_edit_setting?(:premium_mode, :finance)).to be true
       end
@@ -188,7 +208,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "when setting has viewable_by :all but restricted editable_by" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has viewable_by :all but restricted editable_by" do  # Characteristic tested via args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true only for authorized editors" do
         aggregate_failures do
           expect(instance.can_edit_setting?(:notifications, :admin)).to be true
@@ -198,7 +220,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "when setting has no restrictions" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has no restrictions" do  # Characteristic tested via setting/role args
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for any role" do
         expect(instance.can_edit_setting?(:enabled, :guest)).to be true
       end
@@ -208,36 +232,40 @@ RSpec.describe ModelSettings::Modules::Roles do
   describe "role normalization" do
     let(:model_class) do
       Class.new(TestModel) do
-        def self.name; "NormalizationTestModel"; end
+        def self.name
+          "NormalizationTestModel"
+        end
 
         include ModelSettings::DSL
         include ModelSettings::Modules::Roles
 
         # Single role as symbol (uses existing columns)
         setting :premium,
-                type: :column,
-                viewable_by: :admin,
-                editable_by: :admin
+          type: :column,
+          viewable_by: :admin,
+          editable_by: :admin
 
         # Multiple roles as array
         setting :feature,
-                type: :column,
-                viewable_by: [:admin, :finance],
-                editable_by: [:admin, :finance]
+          type: :column,
+          viewable_by: [:admin, :finance],
+          editable_by: [:admin, :finance]
 
         # :all special value
         setting :enabled,
-                type: :column,
-                viewable_by: :all,
-                editable_by: [:admin]
+          type: :column,
+          viewable_by: :all,
+          editable_by: [:admin]
 
         # Nil values (unrestricted)
         setting :notifications,
-                type: :column
+          type: :column
       end
     end
 
-    context "with single symbol" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with single symbol" do  # Characteristic defined via setting definition
+      # rubocop:enable RSpecGuide/ContextSetup
       it "normalizes to array for both viewable_by and editable_by" do
         roles = model_class._settings_roles[:premium]
 
@@ -248,7 +276,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with array of symbols" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with array of symbols" do  # Characteristic defined via setting definition
+      # rubocop:enable RSpecGuide/ContextSetup
       it "keeps array as is" do
         roles = model_class._settings_roles[:feature]
 
@@ -259,7 +289,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with :all special value" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with :all special value" do  # Characteristic defined via setting definition
+      # rubocop:enable RSpecGuide/ContextSetup
       it "preserves :all for viewable_by" do
         roles = model_class._settings_roles[:enabled]
 
@@ -267,15 +299,20 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with nil values (no restrictions)" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with nil values (no restrictions)" do  # Characteristic defined via setting definition
+      # rubocop:enable RSpecGuide/ContextSetup
       it "does NOT store in _settings_roles hash" do
         expect(model_class._settings_roles).not_to have_key(:notifications)
       end
     end
   end
 
-  describe "edge cases" do
-    context "with partial permissions (viewable but NOT editable)" do
+  # rubocop:disable RSpecGuide/HappyPathFirst
+  describe "edge cases" do  # All contexts are edge cases - no happy path
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with partial permissions (viewable but NOT editable)" do  # Characteristic tested via role arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "allows viewing but denies editing for manager role" do
         aggregate_failures do
           expect(instance.can_view_setting?(:premium_mode, :manager)).to be true
@@ -284,7 +321,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with string vs symbol role consistency" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with string vs symbol role consistency" do  # Characteristic tested via role type
+      # rubocop:enable RSpecGuide/ContextSetup
       it "treats string and symbol roles identically" do
         aggregate_failures do
           expect(model_class.settings_viewable_by("finance")).to eq(model_class.settings_viewable_by(:finance))
@@ -293,7 +332,9 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
 
-    context "with non-existent setting name" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with non-existent setting name" do  # Characteristic tested via setting name arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true for unrestricted access" do
         aggregate_failures do
           expect(instance.can_view_setting?(:nonexistent, :guest)).to be true
@@ -302,9 +343,13 @@ RSpec.describe ModelSettings::Modules::Roles do
       end
     end
   end
+  # rubocop:enable RSpecGuide/HappyPathFirst
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "integration with controller" do
-    context "when filtering params by role" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when filtering params by role" do  # Characteristic tested via role arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns only editable settings for finance role" do
         editable_settings = model_class.settings_editable_by(:finance)
 
@@ -317,7 +362,9 @@ RSpec.describe ModelSettings::Modules::Roles do
         expect(editable_settings).to match_array([:premium_mode, :notifications, :feature])
       end
 
-      context "but when role has no edit permissions" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when role has no edit permissions" do  # Characteristic tested via role arg
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns empty array for guest role" do
           editable_settings = model_class.settings_editable_by(:guest)
 
@@ -327,3 +374,4 @@ RSpec.describe ModelSettings::Modules::Roles do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

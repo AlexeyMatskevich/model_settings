@@ -25,20 +25,20 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       include test_module
 
       setting :billing_override,
-              type: :column,
-              authorize_with: :manage_billing?
+        type: :column,
+        authorize_with: :manage_billing?
 
       setting :api_access,
-              type: :column,
-              authorize_with: :admin?
+        type: :column,
+        authorize_with: :admin?
 
       setting :system_config,
-              type: :column,
-              authorize_with: :admin?
+        type: :column,
+        authorize_with: :admin?
 
       setting :display_name,
-              type: :column
-              # No authorization = unrestricted
+        type: :column
+      # No authorization = unrestricted
     end
   end
 
@@ -52,11 +52,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "but when conflicting module is already included" do
-      it "raises ExclusiveGroupConflictError" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when conflicting module is already included" do  # Organizational - setup in example
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "raises ExclusiveGroupConflictError" do  # rubocop:disable RSpec/ExampleLength
         # Setup mock Roles module
         roles_mod = Module.new do
           extend ActiveSupport::Concern
+
           included do
             ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :roles)
           end
@@ -90,13 +93,17 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "when setting has no authorization" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting has no authorization" do  # Characteristic tested via setting name arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns nil" do
         expect(model_class.authorization_for_setting(:display_name)).to be_nil
       end
     end
 
-    context "when setting does not exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting does not exist" do  # Characteristic tested via setting name arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns nil" do
         expect(model_class.authorization_for_setting(:nonexistent)).to be_nil
       end
@@ -111,7 +118,9 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "when no settings require the permission" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no settings require the permission" do  # Characteristic tested via permission arg
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         result = model_class.settings_requiring(:nonexistent_permission?)
 
@@ -149,7 +158,9 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
   end
 
   describe "authorize_with validation" do
-    context "with valid Symbol" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with valid Symbol" do  # Characteristic defined via setting definition
+      # rubocop:enable RSpecGuide/ContextSetup
       it "accepts symbol as authorize_with" do
         valid_model_name = "Valid#{module_name.to_s.camelize}Model"
         test_module = module_class
@@ -166,13 +177,17 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "with invalid types" do
-      it "rejects String" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with invalid types" do  # Organizational - multiple related edge cases
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "rejects String" do  # rubocop:disable RSpec/ExampleLength
         test_module = module_class
 
         expect {
           Class.new(TestModel) do
-            def self.name; "InvalidStringModel"; end
+            def self.name
+              "InvalidStringModel"
+            end
             include ModelSettings::DSL
             include test_module
 
@@ -181,12 +196,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
         }.to raise_error(ArgumentError, /must be a Symbol/)
       end
 
-      it "rejects Array" do
+      it "rejects Array" do  # rubocop:disable RSpec/ExampleLength
         test_module = module_class
 
         expect {
           Class.new(TestModel) do
-            def self.name; "InvalidArrayModel"; end
+            def self.name
+              "InvalidArrayModel"
+            end
             include ModelSettings::DSL
             include test_module
 
@@ -195,12 +212,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
         }.to raise_error(ArgumentError, /must be a Symbol/)
       end
 
-      it "rejects Proc" do
+      it "rejects Proc" do  # rubocop:disable RSpec/ExampleLength
         test_module = module_class
 
         expect {
           Class.new(TestModel) do
-            def self.name; "InvalidProcModel"; end
+            def self.name
+              "InvalidProcModel"
+            end
             include ModelSettings::DSL
             include test_module
 
@@ -209,12 +228,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
         }.to raise_error(ArgumentError, /must be a Symbol/)
       end
 
-      it "provides helpful error message" do
+      it "provides helpful error message" do  # rubocop:disable RSpec/ExampleLength
         test_module = module_class
 
         expect {
           Class.new(TestModel) do
-            def self.name; "HelpfulErrorModel"; end
+            def self.name
+              "HelpfulErrorModel"
+            end
             include ModelSettings::DSL
             include test_module
 
@@ -225,6 +246,7 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
     end
   end
 
+  # rubocop:disable RSpec/MultipleMemoizedHelpers
   describe "integration with mock policy" do
     let(:mock_record) { model_class.new }
 
@@ -253,11 +275,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    let(:admin_user) { double("User", admin?: true, finance?: false) }
-    let(:finance_user) { double("User", admin?: false, finance?: true) }
-    let(:guest_user) { double("User", admin?: false, finance?: false) }
+    let(:admin_user) { instance_double("User", admin?: true, finance?: false) }
+    let(:finance_user) { instance_double("User", admin?: false, finance?: true) }
+    let(:guest_user) { instance_double("User", admin?: false, finance?: false) }
 
-    context "when user is admin" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpec/MultipleMemoizedHelpers
+    context "when user is admin" do  # Characteristic tested via user type
+      # rubocop:enable RSpecGuide/ContextSetup
       it "permits all authorized settings" do
         policy = mock_policy.new(admin_user, mock_record)
         permitted = policy.permitted_settings
@@ -266,7 +291,10 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "when user is finance" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpec/MultipleMemoizedHelpers
+    context "when user is finance" do  # Characteristic tested via user type
+      # rubocop:enable RSpecGuide/ContextSetup
       it "permits only billing settings" do
         policy = mock_policy.new(finance_user, mock_record)
         permitted = policy.permitted_settings
@@ -275,7 +303,9 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
     end
 
-    context "when user is guest" do
+    # rubocop:disable RSpecGuide/ContextSetup, RSpec/MultipleMemoizedHelpers
+    context "when user is guest" do  # Characteristic tested via user type
+      # rubocop:enable RSpecGuide/ContextSetup, RSpec/MultipleMemoizedHelpers
       it "permits no settings" do
         policy = mock_policy.new(guest_user, mock_record)
         permitted = policy.permitted_settings
@@ -322,7 +352,9 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
   end
 
   describe "edge cases" do
-    context "with multiple settings sharing same permission" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "with multiple settings sharing same permission" do  # Characteristic defined via setting definitions
+      # rubocop:enable RSpecGuide/ContextSetup
       it "groups them correctly" do
         settings_with_admin = model_class.settings_requiring(:admin?)
 

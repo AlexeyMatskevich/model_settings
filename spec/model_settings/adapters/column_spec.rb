@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Adapters::Column, type: :model do
   # Create a fresh test model class for each test
   let(:model_class) do
@@ -44,7 +45,7 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "helper methods" do
     let(:instance) { model_class.create! }
 
@@ -174,7 +175,7 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "#read" do
     subject(:read_value) { adapter.read(instance) }
@@ -247,7 +248,7 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns false" do
         expect(adapter.changed?(instance)).to be false
       end
@@ -294,7 +295,7 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns nil" do
         expect(change).to be_nil
       end
@@ -346,7 +347,7 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "boolean validation" do
     let(:instance) { model_class.new }
     let(:adapter) { described_class.new(model_class, model_class.find_setting(:enabled)) }
@@ -459,5 +460,5 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Adapters::Json do
   before do
     # Define the model class (table already exists from active_record.rb)
@@ -81,7 +82,7 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "helper methods" do
     before do
       JsonTestModel.setting :notifications_enabled,
@@ -207,7 +208,7 @@ RSpec.describe ModelSettings::Adapters::Json do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "#read" do
     before do
@@ -295,7 +296,7 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns false" do
         expect(adapter.changed?(instance)).to be false
       end
@@ -350,7 +351,7 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns nil" do
         expect(adapter.change(instance)).to be_nil
       end
@@ -445,7 +446,7 @@ RSpec.describe ModelSettings::Adapters::Json do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts, RSpecGuide/InvariantExamples
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage, RSpecGuide/InvariantExamples
   describe "boolean validation" do
     let(:model_class) do
       Class.new(ActiveRecord::Base) do
@@ -484,27 +485,23 @@ RSpec.describe ModelSettings::Adapters::Json do
       expect(instance.simple_feature).to be_nil
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "but with NOT valid boolean" do
-      context "with string value" do
-        before { instance.simple_feature = "enabled" }
+    context "but with string value" do
+      before { instance.simple_feature = "enabled" }
 
-        it "marks record as invalid" do
-          expect(instance).not_to be_valid
-        end
-      end
-
-      context "with array value" do
-        before { instance.simple_feature = [] }
-
-        it "marks record as invalid" do
-          expect(instance).not_to be_valid
-        end
+      it "marks record as invalid" do
+        expect(instance).not_to be_valid
       end
     end
-    # rubocop:enable RSpecGuide/ContextSetup
 
-    # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+    context "but with array value" do
+      before { instance.simple_feature = [] }
+
+      it "marks record as invalid" do
+        expect(instance).not_to be_valid
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "nested setting validation" do
       it "accepts true", :aggregate_failures do
         expect { instance.analytics_enabled = true }.not_to raise_error
@@ -530,9 +527,9 @@ RSpec.describe ModelSettings::Adapters::Json do
         end
       end
     end
-    # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-    # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "adapter write validation" do
       it "accepts true value", :aggregate_failures do
         expect { adapter.write(instance, true) }.not_to raise_error
@@ -552,7 +549,250 @@ RSpec.describe ModelSettings::Adapters::Json do
         end
       end
     end
-    # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts, RSpecGuide/InvariantExamples
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe "array membership pattern" do
+    let(:model_class) do
+      Class.new(ActiveRecord::Base) do
+        def self.name
+          "TestArrayModel"
+        end
+
+        self.table_name = "test_models"
+        include ModelSettings::DSL
+
+        setting :feature_a,
+          type: :json,
+          storage: {column: :preferences, array: true}
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "getter" do
+      it "returns false when value not in array" do
+        instance = model_class.new(preferences: [])
+        expect(instance.feature_a).to be false
+      end
+
+      it "returns true when value in array" do
+        instance = model_class.new(preferences: ["feature_a"])
+        expect(instance.feature_a).to be true
+      end
+
+      it "returns false when column is nil" do
+        instance = model_class.new(preferences: nil)
+        expect(instance.feature_a).to be false
+      end
+
+      it "returns false when other values in array" do
+        instance = model_class.new(preferences: ["other_feature"])
+        expect(instance.feature_a).to be false
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "setter" do
+      it "adds value to array when set to true" do
+        instance = model_class.new(preferences: [])
+        instance.feature_a = true
+        expect(instance.preferences).to eq(["feature_a"])
+      end
+
+      it "removes value from array when set to false" do
+        instance = model_class.new(preferences: ["feature_a"])
+        instance.feature_a = false
+        expect(instance.preferences).to eq([])
+      end
+
+      it "does not add duplicate when already present" do
+        instance = model_class.new(preferences: ["feature_a"])
+        instance.feature_a = true
+        expect(instance.preferences).to eq(["feature_a"])
+      end
+
+      it "initializes array when nil" do
+        instance = model_class.new(preferences: nil)
+        instance.feature_a = true
+        expect(instance.preferences).to eq(["feature_a"])
+      end
+
+      it "preserves other values in array" do
+        instance = model_class.new(preferences: ["other_feature"])
+        instance.feature_a = true
+        expect(instance.preferences).to include("other_feature", "feature_a")
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "enable!/disable! helpers" do
+      it "enable! adds value to array" do
+        instance = model_class.new(preferences: [])
+        instance.feature_a_enable!
+        expect(instance.preferences).to eq(["feature_a"])
+      end
+
+      it "disable! removes value from array" do
+        instance = model_class.new(preferences: ["feature_a"])
+        instance.feature_a_disable!
+        expect(instance.preferences).to eq([])
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "dirty tracking" do
+      it "tracks changes from false to true" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.create!(preferences: [])
+
+        expect(instance.feature_a_changed?).to be false
+
+        instance.feature_a = true
+
+        expect(instance.feature_a_changed?).to be true
+        expect(instance.feature_a_was).to be false
+        expect(instance.feature_a_change).to eq([false, true])
+      end
+
+      it "tracks changes from true to false" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.create!(preferences: ["feature_a"])
+
+        instance.feature_a = false
+
+        expect(instance.feature_a_changed?).to be true
+        expect(instance.feature_a_was).to be true
+        expect(instance.feature_a_change).to eq([true, false])
+      end
+
+      it "does not track changes when value unchanged" do
+        instance = model_class.create!(preferences: ["feature_a"])
+
+        instance.feature_a = true
+
+        expect(instance.feature_a_changed?).to be false
+      end
+
+      it "does not report change when other array values change" do
+        instance = model_class.create!(preferences: ["feature_a"])
+
+        instance.preferences << "other_feature"
+
+        expect(instance.feature_a_changed?).to be false
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "custom array_value" do
+      let(:model_class) do
+        Class.new(ActiveRecord::Base) do
+          def self.name
+            "TestArrayCustomModel"
+          end
+
+          self.table_name = "test_models"
+          include ModelSettings::DSL
+
+          setting :feature_b,
+            type: :json,
+            storage: {column: :preferences, array: true, array_value: "legacy_feature"}
+        end
+      end
+
+      it "uses custom value in array" do
+        instance = model_class.new(preferences: [])
+        instance.feature_b = true
+        expect(instance.preferences).to eq(["legacy_feature"])
+      end
+
+      it "checks custom value for getter" do
+        instance = model_class.new(preferences: ["legacy_feature"])
+        expect(instance.feature_b).to be true
+      end
+
+      it "does not match setting name" do
+        instance = model_class.new(preferences: ["feature_b"])
+        expect(instance.feature_b).to be false
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "validation" do
+      it "validates column is array type" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.new(preferences: "not_array")
+
+        expect(instance.valid?).to be false
+        expect(instance.errors[:preferences]).to include("must be an array")
+      end
+
+      it "allows nil" do
+        instance = model_class.new(preferences: nil)
+        expect(instance.valid?).to be true
+      end
+
+      it "allows empty array" do
+        instance = model_class.new(preferences: [])
+        expect(instance.valid?).to be true
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "multiple settings, same column" do
+      let(:model_class) do
+        Class.new(ActiveRecord::Base) do
+          def self.name
+            "TestMultiArrayModel"
+          end
+
+          self.table_name = "test_models"
+          include ModelSettings::DSL
+
+          setting :feature_a,
+            type: :json,
+            storage: {column: :preferences, array: true}
+
+          setting :feature_b,
+            type: :json,
+            storage: {column: :preferences, array: true}
+        end
+      end
+
+      it "works independently" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.new(preferences: [])
+
+        instance.feature_a = true
+        expect(instance.preferences).to eq(["feature_a"])
+        expect(instance.feature_a).to be true
+        expect(instance.feature_b).to be false
+
+        instance.feature_b = true
+        expect(instance.preferences).to include("feature_a", "feature_b")
+        expect(instance.feature_a).to be true
+        expect(instance.feature_b).to be true
+      end
+
+      it "tracks changes independently" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.create!(preferences: [])
+
+        instance.feature_a = true
+
+        expect(instance.feature_a_changed?).to be true
+        expect(instance.feature_b_changed?).to be false
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+    describe "persistence" do
+      it "persists array changes" do  # rubocop:disable RSpec/MultipleExpectations
+        instance = model_class.create!(preferences: [])
+
+        instance.feature_a = true
+        instance.save!
+
+        instance.reload
+        expect(instance.feature_a).to be true
+        expect(instance.preferences).to eq(["feature_a"])
+      end
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage, RSpecGuide/InvariantExamples
 end

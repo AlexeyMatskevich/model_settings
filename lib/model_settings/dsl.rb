@@ -95,6 +95,7 @@ module ModelSettings
           subclass._settings_by_name = {}
         end
       end
+
       # Define a setting on the model
       #
       # @param name [Symbol] The name of the setting

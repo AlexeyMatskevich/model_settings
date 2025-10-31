@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::DependencyEngine do
   # Test model setup
   let(:model_class) do
@@ -526,20 +527,16 @@ RSpec.describe ModelSettings::DependencyEngine do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup, RSpec/ExampleLength
-    # Context contains two independent tests without shared setup
-    # Second test requires complex stubbing setup (>10 lines justified)
-    context "when cascade creates infinite loop" do
-      it "has MAX_ITERATIONS safety limit" do
-        expect(described_class::MAX_ITERATIONS).to eq(100)
-      end
+    it "has MAX_ITERATIONS safety limit to prevent infinite cascade loops" do
+      expect(described_class::MAX_ITERATIONS).to eq(100)
+    end
 
-      it "raises error after reaching iteration limit" do
+    # rubocop:disable RSpec/ExampleLength
+    # Test requires complex stubbing setup (>10 lines justified)
+    context "when cascade creates infinite loop" do
+      before do
         model_class.setting :feature, type: :column, default: false
         model_class.compile_settings!
-
-        instance = model_class.create!
-        initial_setting = model_class.find_setting(:feature)
 
         # Create fake settings to bypass all_processed check
         counter = 0
@@ -549,12 +546,17 @@ RSpec.describe ModelSettings::DependencyEngine do
           [ModelSettings::Setting.new(:"fake_#{counter}", {})]
         end
         allow(engine).to receive(:apply_syncs_batch).and_return([])
+      end
+
+      it "raises error after reaching iteration limit" do
+        instance = model_class.create!
+        initial_setting = model_class.find_setting(:feature)
 
         expect { engine.execute_cascades_and_syncs(instance, [initial_setting]) }
           .to raise_error(/Infinite cascade detected/)
       end
     end
-    # rubocop:enable RSpecGuide/ContextSetup, RSpec/ExampleLength
+    # rubocop:enable RSpec/ExampleLength
     # rubocop:enable RSpecGuide/DuplicateLetValues, RSpec/MultipleExpectations
   end
 
@@ -1001,3 +1003,4 @@ RSpec.describe ModelSettings::DependencyEngine do
   end
   # rubocop:enable RSpec/MultipleMemoizedHelpers, RSpecGuide/DuplicateLetValues
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

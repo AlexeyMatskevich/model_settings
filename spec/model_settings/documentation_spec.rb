@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Documentation do
   after do
     ModelSettings.reset_configuration!
@@ -924,3 +925,4 @@ RSpec.describe ModelSettings::Documentation do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

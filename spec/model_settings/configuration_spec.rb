@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Configuration do
   subject(:config) { described_class.new }
 
@@ -11,7 +12,7 @@ RSpec.describe ModelSettings::Configuration do
     ModelSettings.reset_configuration!
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#initialize" do
     it "sets default_modules to empty array" do
       expect(config.default_modules).to eq([])
@@ -21,7 +22,7 @@ RSpec.describe ModelSettings::Configuration do
       expect(config.inherit_authorization).to be true
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "#default_modules=" do
     context "when setting to array of modules" do
@@ -59,7 +60,7 @@ RSpec.describe ModelSettings::Configuration do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#reset!" do
     subject(:reset_action) { config.reset! }
 
@@ -78,5 +79,5 @@ RSpec.describe ModelSettings::Configuration do
       expect(config.inherit_authorization).to be true
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

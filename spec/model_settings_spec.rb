@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings do
   around do |example|
     example.run
@@ -11,7 +12,7 @@ RSpec.describe ModelSettings do
     expect(ModelSettings::VERSION).not_to be_nil
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".configuration" do
     it "returns Configuration instance" do
       expect(described_class.configuration).to be_a(ModelSettings::Configuration)
@@ -23,7 +24,7 @@ RSpec.describe ModelSettings do
       expect(config1).to equal(config2)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".configure" do
     it "yields configuration object" do
@@ -72,7 +73,7 @@ RSpec.describe ModelSettings do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".reset_configuration!" do
     subject(:reset_action) { described_class.reset_configuration! }
 
@@ -105,9 +106,9 @@ RSpec.describe ModelSettings do
       expect(config.inherit_authorization).to be true
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "configuration isolation in tests" do
     it "does not leak configuration between tests", :aggregate_failures do
       # This test should start with clean config due to around hook
@@ -115,5 +116,5 @@ RSpec.describe ModelSettings do
       expect(described_class.configuration.inherit_authorization).to be true
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

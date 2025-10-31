@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Modules::I18n do
   let(:model_class) do
     Class.new(TestModel) do
@@ -49,7 +50,9 @@ RSpec.describe ModelSettings::Modules::I18n do
     Object.const_set(:I18n, i18n_backup) if i18n_backup
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "ClassMethods" do
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe ".settings_i18n_scope" do
       it "returns I18n scope based on model_name.i18n_key" do
         expect(model_class.settings_i18n_scope).to eq("model_settings.i18n_test_model")
@@ -74,6 +77,7 @@ RSpec.describe ModelSettings::Modules::I18n do
             end
 
             include ModelSettings::DSL
+
             setting :enabled, type: :column
           end
         end
@@ -95,7 +99,9 @@ RSpec.describe ModelSettings::Modules::I18n do
       expect(result).to eq("Premium mode")
     end
 
-    context "but with custom label_key in metadata" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but with custom label_key in metadata" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "uses custom key for translation" do
         allow(::I18n).to receive(:t).with("custom.notifications.label").and_return("Custom Notifications Label")
 
@@ -103,7 +109,9 @@ RSpec.describe ModelSettings::Modules::I18n do
       end
     end
 
-    context "but when I18n is NOT defined" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when I18n is NOT defined" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns humanized setting name" do
         without_i18n_constant do
           expect(instance.t_label_for(:enabled)).to eq("Enabled")
@@ -122,7 +130,9 @@ RSpec.describe ModelSettings::Modules::I18n do
       expect(result).to eq("Premium features")
     end
 
-    context "but with custom description_key in metadata" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but with custom description_key in metadata" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "uses custom key for translation" do
         allow(::I18n).to receive(:t).with("custom.notifications.description").and_return("Custom description")
 
@@ -130,7 +140,9 @@ RSpec.describe ModelSettings::Modules::I18n do
       end
     end
 
-    context "but when I18n is NOT defined" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when I18n is NOT defined" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns setting.description" do
         without_i18n_constant do
           expect(instance.t_description_for(:premium_mode)).to eq("Premium features")
@@ -149,7 +161,9 @@ RSpec.describe ModelSettings::Modules::I18n do
       expect(result).to be_nil
     end
 
-    context "but when I18n is NOT defined" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when I18n is NOT defined" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns nil" do
         without_i18n_constant do
           expect(instance.t_help_for(:enabled)).to be_nil
@@ -158,6 +172,7 @@ RSpec.describe ModelSettings::Modules::I18n do
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#translations_for" do
     before do
       require "i18n" unless defined?(::I18n)
@@ -170,9 +185,9 @@ RSpec.describe ModelSettings::Modules::I18n do
 
     it "calls t_label_for, t_description_for, and t_help_for" do
       aggregate_failures "delegates to translation methods" do
-        expect(instance).to receive(:t_label_for).with(:enabled)
-        expect(instance).to receive(:t_description_for).with(:enabled)
-        expect(instance).to receive(:t_help_for).with(:enabled)
+        expect(instance).to receive(:t_label_for).with(:enabled)  # rubocop:disable RSpec/MessageSpies
+        expect(instance).to receive(:t_description_for).with(:enabled)  # rubocop:disable RSpec/MessageSpies
+        expect(instance).to receive(:t_help_for).with(:enabled)  # rubocop:disable RSpec/MessageSpies
 
         instance.translations_for(:enabled)
       end
@@ -180,12 +195,13 @@ RSpec.describe ModelSettings::Modules::I18n do
 
     it "passes options to translation methods" do
       aggregate_failures "passes options through" do
-        expect(instance).to receive(:t_label_for).with(:enabled, locale: :ru)
-        expect(instance).to receive(:t_description_for).with(:enabled, locale: :ru)
-        expect(instance).to receive(:t_help_for).with(:enabled, locale: :ru)
+        expect(instance).to receive(:t_label_for).with(:enabled, locale: :ru)  # rubocop:disable RSpec/MessageSpies
+        expect(instance).to receive(:t_description_for).with(:enabled, locale: :ru)  # rubocop:disable RSpec/MessageSpies
+        expect(instance).to receive(:t_help_for).with(:enabled, locale: :ru)  # rubocop:disable RSpec/MessageSpies
 
         instance.translations_for(:enabled, locale: :ru)
       end
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

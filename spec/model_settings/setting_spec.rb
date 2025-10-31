@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Setting do
   describe ".new" do
     subject(:setting) { described_class.new(:feature_flag, options) }
@@ -52,7 +53,7 @@ RSpec.describe ModelSettings::Setting do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#add_child" do
     subject(:add_action) { parent.add_child(child) }
 
@@ -81,7 +82,7 @@ RSpec.describe ModelSettings::Setting do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "#type" do
     subject(:setting) { described_class.new(:flag, options) }
@@ -347,27 +348,23 @@ RSpec.describe ModelSettings::Setting do
       parent.add_child(child2)
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when child exists" do
-      context "when searching by symbol" do
-        let(:child_name) { :child1 }
+    context "when searching by symbol" do
+      let(:child_name) { :child1 }
 
-        it "finds child" do
-          expect(found_child).to eq(child1)
-        end
-      end
-
-      context "when searching by string" do
-        let(:child_name) { "child2" }
-
-        it "finds child" do
-          expect(found_child).to eq(child2)
-        end
+      it "finds child" do
+        expect(found_child).to eq(child1)
       end
     end
-    # rubocop:enable RSpecGuide/ContextSetup
 
-    context "when child does NOT exist" do
+    context "when searching by string" do
+      let(:child_name) { "child2" }
+
+      it "finds child" do
+        expect(found_child).to eq(child2)
+      end
+    end
+
+    context "but when child does NOT exist" do
       let(:child_name) { :nonexistent }
 
       it "returns nil" do

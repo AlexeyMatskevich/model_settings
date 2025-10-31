@@ -82,7 +82,7 @@ module ModelSettings
             _authorized_settings[name] = options.delete(:authorize_with)
           end
 
-          super(name, **options, &block)
+          super
         end
 
         # Get the authorization method for a specific setting

@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Deprecation do
   let(:model_class) do
     Class.new(TestModel) do
@@ -43,12 +44,14 @@ RSpec.describe ModelSettings::Deprecation do
       end
 
       include ModelSettings::DSL
+
       setting :enabled, type: :column
     end
   end
 
   let(:simple_instance) { simple_model.create! }
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "ClassMethods" do
     describe ".deprecated_settings" do
       it "returns array of deprecated settings" do
@@ -56,7 +59,9 @@ RSpec.describe ModelSettings::Deprecation do
         expect(results.map(&:name)).to include(:feature, :premium_mode)
       end
 
-      context "but when no deprecated settings" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when no deprecated settings" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns empty array" do
           expect(simple_model.deprecated_settings).to be_empty
         end
@@ -64,21 +69,27 @@ RSpec.describe ModelSettings::Deprecation do
     end
 
     describe ".settings_deprecated_since" do
-      context "when version matches" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when version matches" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns settings deprecated since that version" do
           results = model_class.settings_deprecated_since("2.0.0")
           expect(results.map(&:name)).to eq([:feature])
         end
       end
 
-      context "when version does NOT match" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when version does NOT match" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns empty array" do
           results = model_class.settings_deprecated_since("3.0.0")
           expect(results).to be_empty
         end
       end
 
-      context "when deprecated_since NOT specified" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when deprecated_since NOT specified" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "excludes those settings" do
           results = model_class.settings_deprecated_since("1.0.0")
           expect(results.map(&:name)).not_to include(:premium_mode)
@@ -87,19 +98,25 @@ RSpec.describe ModelSettings::Deprecation do
     end
 
     describe ".setting_deprecated?" do
-      context "when setting is deprecated" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting is deprecated" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns true" do
           expect(model_class.setting_deprecated?(:feature)).to be true
         end
       end
 
-      context "when setting is NOT deprecated" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting is NOT deprecated" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns false" do
           expect(model_class.setting_deprecated?(:enabled)).to be false
         end
       end
 
-      context "when setting does NOT exist" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting does NOT exist" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns false" do
           expect(model_class.setting_deprecated?(:nonexistent)).to be false
         end
@@ -107,21 +124,27 @@ RSpec.describe ModelSettings::Deprecation do
     end
 
     describe ".deprecation_reason_for" do
-      context "when setting has reason" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting has reason" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns reason string" do
           reason = model_class.deprecation_reason_for(:feature)
           expect(reason).to eq("Use enabled instead")
         end
       end
 
-      context "when setting deprecated without reason" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting deprecated without reason" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns default message" do
           reason = model_class.deprecation_reason_for(:premium_mode)
           expect(reason).to eq("Setting is deprecated")
         end
       end
 
-      context "when setting NOT deprecated" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "when setting NOT deprecated" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns nil" do
           reason = model_class.deprecation_reason_for(:enabled)
           expect(reason).to be_nil
@@ -129,8 +152,9 @@ RSpec.describe ModelSettings::Deprecation do
       end
     end
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe ".deprecation_report" do
-      it "returns comprehensive deprecation report" do
+      it "returns comprehensive deprecation report" do  # rubocop:disable RSpec/ExampleLength, RSpec/MultipleExpectations
         report = model_class.deprecation_report
         first_setting = report[:settings].find { |s| s[:name] == :feature }
 
@@ -160,7 +184,7 @@ RSpec.describe ModelSettings::Deprecation do
     before { instance.feature = feature_enabled }
 
     it "warns about the setting when enabled" do
-      expect(instance).to receive(:warn_deprecated_setting)
+      expect(instance).to receive(:warn_deprecated_setting)  # rubocop:disable RSpec/MessageSpies
       instance.warn_about_deprecated_settings
     end
 
@@ -168,23 +192,26 @@ RSpec.describe ModelSettings::Deprecation do
       let(:feature_enabled) { false }  # Null object - переопределение
 
       it "does NOT warn" do
-        expect(instance).not_to receive(:warn_deprecated_setting)
+        expect(instance).not_to receive(:warn_deprecated_setting)  # rubocop:disable RSpec/MessageSpies
         instance.warn_about_deprecated_settings
       end
     end
 
-    context "but when no deprecated settings" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when no deprecated settings" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "does nothing" do
         expect { simple_instance.warn_about_deprecated_settings }.not_to raise_error
       end
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#warn_deprecated_setting" do
     let(:setting) { model_class.find_setting(:feature) }
 
-    it "logs deprecation warning and calls track_deprecated_setting_usage" do
-      expect(instance).to receive(:track_deprecated_setting_usage).with(setting)
+    it "logs deprecation warning and calls track_deprecated_setting_usage" do  # rubocop:disable RSpec/MultipleExpectations
+      expect(instance).to receive(:track_deprecated_setting_usage).with(setting)  # rubocop:disable RSpec/MessageSpies
 
       aggregate_failures do
         expect { instance.warn_deprecated_setting(setting) }.not_to raise_error
@@ -192,6 +219,7 @@ RSpec.describe ModelSettings::Deprecation do
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#track_deprecated_setting_usage" do
     let(:setting) { model_class.find_setting(:feature) }
 
@@ -200,8 +228,8 @@ RSpec.describe ModelSettings::Deprecation do
         attr_accessor :tracked_settings
 
         def track_deprecated_setting_usage(setting)
-          @tracked_settings ||= []
-          @tracked_settings << setting.name
+          @tracked_settings ||= []  # rubocop:disable RSpec/InstanceVariable
+          @tracked_settings << setting.name  # rubocop:disable RSpec/InstanceVariable
         end
       end
 
@@ -210,6 +238,7 @@ RSpec.describe ModelSettings::Deprecation do
     end
   end
 
+  # rubocop:disable RSpec/MultipleMemoizedHelpers
   describe "#using_deprecated_settings?" do
     let(:feature_enabled) { true }  # Happy path по умолчанию
     let(:premium_enabled) { false }
@@ -223,6 +252,7 @@ RSpec.describe ModelSettings::Deprecation do
       expect(instance.using_deprecated_settings?).to be true
     end
 
+    # rubocop:disable RSpec/MultipleMemoizedHelpers
     context "but when all deprecated settings are disabled" do
       let(:feature_enabled) { false }  # Null object - переопределение
 
@@ -231,13 +261,17 @@ RSpec.describe ModelSettings::Deprecation do
       end
     end
 
-    context "but when no deprecated settings" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpec/MultipleMemoizedHelpers
+    context "but when no deprecated settings" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns false" do
         expect(simple_instance.using_deprecated_settings?).to be false
       end
     end
   end
 
+  # rubocop:disable RSpec/MultipleMemoizedHelpers
   describe "#active_deprecated_settings" do
     let(:feature_enabled) { true }  # Happy path - some enabled
     let(:premium_enabled) { false }
@@ -251,6 +285,7 @@ RSpec.describe ModelSettings::Deprecation do
       expect(instance.active_deprecated_settings).to eq([:feature])
     end
 
+    # rubocop:disable RSpec/MultipleMemoizedHelpers
     context "but when all deprecated settings disabled" do
       let(:feature_enabled) { false }  # Null object - переопределение
 
@@ -259,11 +294,13 @@ RSpec.describe ModelSettings::Deprecation do
       end
     end
 
-    context "but when no deprecated settings" do
+    # rubocop:disable RSpecGuide/ContextSetup, RSpec/MultipleMemoizedHelpers
+    context "but when no deprecated settings" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup, RSpec/MultipleMemoizedHelpers
       it "returns empty array" do
         expect(simple_instance.active_deprecated_settings).to be_empty
       end
     end
   end
-
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

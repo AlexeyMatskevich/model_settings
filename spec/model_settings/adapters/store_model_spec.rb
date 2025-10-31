@@ -3,6 +3,7 @@
 require "spec_helper"
 require "store_model"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Adapters::StoreModel do
   before do
     # Table already exists from active_record.rb
@@ -77,7 +78,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "helper methods" do
     before do
       StoreModelTestModel.setting :email_enabled,
@@ -205,7 +206,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "#read" do
     before do
@@ -322,14 +323,14 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns false" do
         expect(adapter.changed?(instance)).to be false
       end
     end
     # rubocop:enable RSpecGuide/ContextSetup
 
-    context "when StoreModel instance is nil" do
+    context "and when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
 
       it "returns false" do
@@ -359,14 +360,14 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns current value" do
         expect(adapter.was(instance)).to be false
       end
     end
     # rubocop:enable RSpecGuide/ContextSetup
 
-    context "when StoreModel instance is nil" do
+    context "and when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
 
       it "returns nil" do
@@ -396,14 +397,14 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
-    context "when value has NOT changed" do
+    context "but when value has NOT changed" do  # No changes - testing default state
       it "returns nil" do
         expect(adapter.change(instance)).to be_nil
       end
     end
     # rubocop:enable RSpecGuide/ContextSetup
 
-    context "when StoreModel instance is nil" do
+    context "and when StoreModel instance is nil" do
       let(:instance) { StoreModelTestModel.create!(ai_settings: nil) }
 
       it "returns nil" do
@@ -517,7 +518,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "boolean validation" do
     before do
       # Table already exists from active_record.rb
@@ -556,35 +557,31 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       expect(instance.transcription).to be_nil
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "but with NOT valid boolean" do
-      context "with string value" do
-        before { instance.transcription = "enabled" }
+    context "but with string value" do
+      before { instance.transcription = "enabled" }
 
-        it "marks record as invalid" do
-          expect(instance).not_to be_valid
-        end
-      end
-
-      context "with integer value" do
-        before { instance.transcription = 1 }
-
-        it "marks record as invalid" do
-          expect(instance).not_to be_valid
-        end
-      end
-
-      context "with hash value" do
-        before { instance.transcription = {enabled: true} }
-
-        it "marks record as invalid" do
-          expect(instance).not_to be_valid
-        end
+      it "marks record as invalid" do
+        expect(instance).not_to be_valid
       end
     end
-    # rubocop:enable RSpecGuide/ContextSetup
 
-    # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+    context "but with integer value" do
+      before { instance.transcription = 1 }
+
+      it "marks record as invalid" do
+        expect(instance).not_to be_valid
+      end
+    end
+
+    context "but with hash value" do
+      before { instance.transcription = {enabled: true} }
+
+      it "marks record as invalid" do
+        expect(instance).not_to be_valid
+      end
+    end
+
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "adapter write validation" do
       it "accepts true value", :aggregate_failures do
         expect { adapter.write(instance, true) }.not_to raise_error
@@ -596,21 +593,17 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
         expect(instance.transcription).to be false
       end
 
-      # rubocop:disable RSpecGuide/ContextSetup
-      context "but with NOT valid values" do
-        it "rejects string value" do
-          adapter.write(instance, "value")
-          expect(instance).not_to be_valid
-        end
-
-        it "rejects array value" do
-          adapter.write(instance, [])
-          expect(instance).not_to be_valid
-        end
+      it "rejects string value" do
+        adapter.write(instance, "value")
+        expect(instance).not_to be_valid
       end
-      # rubocop:enable RSpecGuide/ContextSetup
+
+      it "rejects array value" do
+        adapter.write(instance, [])
+        expect(instance).not_to be_valid
+      end
     end
-    # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

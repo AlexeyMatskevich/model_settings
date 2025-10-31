@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::DSL do
   # Create a test class that includes the DSL
   let(:test_class) do
@@ -74,60 +75,56 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "with nested settings" do
-      context "with single level" do
-        before do
-          test_class.setting :features do
-            setting :ai_enabled
-            setting :analytics_enabled
-          end
-        end
-
-        let(:parent) { test_class.find_setting(:features) }
-        let(:child) { parent.find_child(:ai_enabled) }
-
-        it "creates hierarchical structure", :aggregate_failures do
-          expect(parent).to be_a(ModelSettings::Setting)
-          expect(parent.children.size).to eq(2)
-          expect(child.parent).to eq(parent)
-          expect(parent.children).to include(child)
+    context "with single level nested settings" do
+      before do
+        test_class.setting :features do
+          setting :ai_enabled
+          setting :analytics_enabled
         end
       end
 
-      context "with multiple levels" do
-        before do
-          test_class.setting :billing do
-            setting :invoices do
-              setting :auto_send
-            end
-          end
-        end
+      let(:parent) { test_class.find_setting(:features) }
+      let(:child) { parent.find_child(:ai_enabled) }
 
-        let(:billing) { test_class.find_setting(:billing) }
-        let(:invoices) { billing.find_child(:invoices) }
-        let(:auto_send) { invoices.find_child(:auto_send) }
-
-        it "supports nested path" do
-          expect(auto_send.path).to eq([:billing, :invoices, :auto_send])
-        end
-
-        it "traverses to root from deep child" do
-          expect(auto_send.root).to eq(billing)
-        end
-
-        it "collects all descendants from root" do
-          expect(billing.descendants).to match_array([invoices, auto_send])
-        end
-
-        it "navigates through hierarchy", :aggregate_failures do
-          found = billing.find_child(:invoices)
-          expect(found).to eq(invoices)
-          expect(found.find_child(:auto_send)).to eq(auto_send)
-        end
+      it "creates hierarchical structure", :aggregate_failures do
+        expect(parent).to be_a(ModelSettings::Setting)
+        expect(parent.children.size).to eq(2)
+        expect(child.parent).to eq(parent)
+        expect(parent.children).to include(child)
       end
     end
-    # rubocop:enable RSpecGuide/ContextSetup
+
+    context "with multiple levels nested settings" do
+      before do
+        test_class.setting :billing do
+          setting :invoices do
+            setting :auto_send
+          end
+        end
+      end
+
+      let(:billing) { test_class.find_setting(:billing) }
+      let(:invoices) { billing.find_child(:invoices) }
+      let(:auto_send) { invoices.find_child(:auto_send) }
+
+      it "supports nested path" do
+        expect(auto_send.path).to eq([:billing, :invoices, :auto_send])
+      end
+
+      it "traverses to root from deep child" do
+        expect(auto_send.root).to eq(billing)
+      end
+
+      it "collects all descendants from root" do
+        expect(billing.descendants).to match_array([invoices, auto_send])
+      end
+
+      it "navigates through hierarchy", :aggregate_failures do
+        found = billing.find_child(:invoices)
+        expect(found).to eq(invoices)
+        expect(found.find_child(:auto_send)).to eq(auto_send)
+      end
+    end
 
     context "with multiple settings" do
       before do
@@ -198,28 +195,31 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when finding root setting" do
-      it "finds by symbol" do
-        setting = test_class.find_setting(:enabled)
-        expect(setting.name).to eq(:enabled)
-      end
-
-      it "finds by string" do
-        setting = test_class.find_setting("enabled")
-        expect(setting.name).to eq(:enabled)
-      end
+    it "finds root setting by symbol" do
+      setting = test_class.find_setting(:enabled)
+      expect(setting.name).to eq(:enabled)
     end
 
-    context "when finding nested setting" do
-      context "with single level path" do
+    it "finds root setting by string" do
+      setting = test_class.find_setting("enabled")
+      expect(setting.name).to eq(:enabled)
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when finding nested setting" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "with single level path" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "finds by path array" do
           setting = test_class.find_setting([:features, :ai])
           expect(setting.name).to eq(:ai)
         end
       end
 
-      context "with deep path" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "with deep path" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "finds deeply nested setting" do
           setting = test_class.find_setting([:features, :analytics, :tracking])
           expect(setting.name).to eq(:tracking)
@@ -227,7 +227,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
-    context "when setting does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when setting does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns nil for nonexistent root setting" do
         expect(test_class.find_setting(:nonexistent)).to be_nil
       end
@@ -243,7 +245,7 @@ RSpec.describe ModelSettings::DSL do
     # rubocop:enable RSpecGuide/ContextSetup
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".root_settings" do
     before do
       test_class.setting :root1
@@ -262,9 +264,9 @@ RSpec.describe ModelSettings::DSL do
       expect(roots.map(&:name)).not_to include(:child1, :child2)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".leaf_settings" do
     before do
       test_class.setting :standalone
@@ -283,9 +285,9 @@ RSpec.describe ModelSettings::DSL do
       expect(leaves.map(&:name)).not_to include(:parent, :child2)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".all_settings_recursive" do
     before do
       test_class.setting :root1
@@ -306,7 +308,7 @@ RSpec.describe ModelSettings::DSL do
       expect(all_settings.map(&:name)).to include(:root1, :child1, :grandchild)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe "class isolation" do
     let(:test_class_a) do

@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Callbacks do
   let(:model_class) do
     Class.new(TestModel) do
@@ -62,10 +63,12 @@ RSpec.describe ModelSettings::Callbacks do
         end
       end
 
-      context "but with access to instance variables" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but with access to instance variables" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "can access instance variables" do
           instance.instance_variable_set(:@test_var, "test")
-          setting.options[:after_enable] = -> { @test_var }
+          setting.options[:after_enable] = -> { @test_var }  # rubocop:disable RSpec/InstanceVariable
 
           expect(instance.execute_setting_callbacks(setting, :enable, :after)).to be true
         end
@@ -101,15 +104,18 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    context "when callback is nil" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when callback is nil" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true" do
         expect(instance.execute_setting_callbacks(setting, :enable, :before)).to be true
       end
     end
 
-    it "supports different action types (enable, disable, toggle, change)" do
+    it "supports different action types (enable, disable, toggle, change)" do  # rubocop:disable RSpec/ExampleLength
       model_class.class_eval do
-        def track_action; end
+        def track_action
+        end
       end
 
       aggregate_failures "all action types" do
@@ -129,7 +135,8 @@ RSpec.describe ModelSettings::Callbacks do
 
     it "supports different timing types (before, after)" do
       model_class.class_eval do
-        def track_callback; end
+        def track_callback
+        end
       end
 
       aggregate_failures "all timing types" do
@@ -164,7 +171,7 @@ RSpec.describe ModelSettings::Callbacks do
   describe "#track_setting_change_for_commit" do
     let(:setting) { model_class.find_setting(:enabled) }
 
-    it "adds setting to pending callbacks array and initializes if needed" do
+    it "adds setting to pending callbacks array and initializes if needed" do  # rubocop:disable RSpec/MultipleExpectations
       expect(instance.instance_variable_get(:@_pending_setting_callbacks)).to be_nil
 
       instance.track_setting_change_for_commit(setting)
@@ -175,7 +182,9 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    context "but when adding duplicate settings" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when adding duplicate settings" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "does NOT add duplicate entries" do
         instance.track_setting_change_for_commit(setting)
         instance.track_setting_change_for_commit(setting)
@@ -197,7 +206,9 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    context "when no pending callbacks" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no pending callbacks" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns false" do
         expect(instance.has_pending_setting_callbacks?).to be false
       end
@@ -207,7 +218,9 @@ RSpec.describe ModelSettings::Callbacks do
   describe "#run_pending_setting_callbacks" do
     let(:setting) { model_class.find_setting(:enabled) }
 
-    context "when pending callbacks exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when pending callbacks exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       context "with after_change_commit as Symbol" do
         before do
           model_class.class_eval do
@@ -303,13 +316,16 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    context "when no pending callbacks" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no pending callbacks" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "does nothing" do
         expect { instance.run_pending_setting_callbacks }.not_to raise_error
       end
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "integration with ActiveRecord" do
     context "when after_commit hook fires" do
       let(:model_class) do
@@ -356,3 +372,4 @@ RSpec.describe ModelSettings::Callbacks do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

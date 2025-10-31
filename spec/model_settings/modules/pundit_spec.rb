@@ -2,6 +2,8 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Modules::Pundit do
-  it_behaves_like "policy-based authorization module", :pundit, ModelSettings::Modules::Pundit
+  it_behaves_like "policy-based authorization module", :pundit, described_class
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

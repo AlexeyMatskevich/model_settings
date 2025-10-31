@@ -12,7 +12,7 @@
 #   it_behaves_like "an adapter with dirty tracking"
 #   it_behaves_like "an adapter with read/write operations"
 
-# rubocop:disable RSpecGuide/CharacteristicsAndContexts
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.shared_examples "an adapter with helper methods" do
   # Expects:
   # - instance: model instance with setting defined
@@ -120,9 +120,9 @@ RSpec.shared_examples "an adapter with helper methods" do
     end
   end
 end
-# rubocop:enable RSpecGuide/CharacteristicsAndContexts
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-# rubocop:disable RSpecGuide/CharacteristicsAndContexts
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.shared_examples "an adapter with dirty tracking" do
   # Expects:
   # - instance: model instance with setting defined
@@ -140,7 +140,7 @@ RSpec.shared_examples "an adapter with dirty tracking" do
       end
 
       # rubocop:disable RSpecGuide/ContextSetup
-      context "when value has NOT changed" do
+      context "but when value has NOT changed" do  # No changes - testing default state
         it "returns false" do
           expect(adapter.changed?(instance)).to be false
         end
@@ -191,9 +191,9 @@ RSpec.shared_examples "an adapter with dirty tracking" do
     end
   end
 end
-# rubocop:enable RSpecGuide/CharacteristicsAndContexts
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-# rubocop:disable RSpecGuide/CharacteristicsAndContexts
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.shared_examples "an adapter with read/write operations" do
   # Expects:
   # - instance: model instance with setting defined
@@ -244,9 +244,9 @@ RSpec.shared_examples "an adapter with read/write operations" do
     end
   end
 end
-# rubocop:enable RSpecGuide/CharacteristicsAndContexts
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-# rubocop:disable RSpecGuide/CharacteristicsAndContexts
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.shared_examples "an adapter with persistence" do
   # Expects:
   # - instance: model instance with setting defined
@@ -261,4 +261,4 @@ RSpec.shared_examples "an adapter with persistence" do
     end
   end
 end
-# rubocop:enable RSpecGuide/CharacteristicsAndContexts
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage

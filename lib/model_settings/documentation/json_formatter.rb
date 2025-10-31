@@ -45,7 +45,7 @@ module ModelSettings
         # Deprecation
         if setting.deprecated?
           dep_msg = setting.options[:deprecated]
-          hash[:deprecated] = dep_msg == true ? true : dep_msg.to_s
+          hash[:deprecated] = (dep_msg == true) ? true : dep_msg.to_s
         else
           hash[:deprecated] = false
         end

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "set"
+
 module ModelSettings
   module Adapters
     # JSON adapter for storing multiple settings in a single JSON column
@@ -44,8 +46,14 @@ module ModelSettings
           setup_column_serialization(column_name)
         end
 
-        # Setup accessor methods for this setting
-        setup_accessors(column_name, setting_name)
+        # Check if this is array membership pattern
+        if array_membership?
+          # Setup array membership accessors (different behavior)
+          setup_array_membership!(column_name, setting_name)
+        else
+          # Setup regular JSON accessor methods
+          setup_accessors(column_name, setting_name)
+        end
 
         # Define enable! helper method with callbacks
         model_class.define_method("#{setting_name}_enable!") do
@@ -144,6 +152,26 @@ module ModelSettings
         storage = setting.storage
         return storage[:column] if storage.is_a?(Hash) && storage[:column]
         raise ArgumentError, "JSON adapter requires storage: {column: :column_name}"
+      end
+
+      # Check if this setting uses array membership pattern
+      #
+      # @return [Boolean] true if storage has array: true option
+      def array_membership?
+        storage = setting.storage
+        storage.is_a?(Hash) && storage[:array] == true
+      end
+
+      # Get the value to use in the array
+      #
+      # Defaults to setting name if array_value not specified.
+      # This allows custom values for legacy compatibility or renaming.
+      #
+      # @return [String] the value to store/check in the array
+      def array_value
+        storage = setting.storage
+        return storage[:array_value].to_s if storage.is_a?(Hash) && storage[:array_value]
+        setting.name.to_s
       end
 
       # Setup JSON serialization for a column
@@ -424,6 +452,88 @@ module ModelSettings
           if child_setting.children.any?
             child_adapter.send(:setup_nested_settings, column_name)
           end
+        end
+      end
+
+      # Setup array membership accessors and dirty tracking
+      #
+      # Array membership pattern stores settings as string values in a JSON array.
+      # The getter returns true if value is in array, false otherwise.
+      # The setter adds/removes the value from the array.
+      #
+      # @param column_name [Symbol] The JSON column name
+      # @param setting_name [Symbol] The setting name
+      # @return [void]
+      def setup_array_membership!(column_name, setting_name)
+        setting_sym = setting_name.to_sym
+        column_sym = column_name.to_sym
+        setting_name.to_s
+        value_to_store = array_value
+
+        # Track that we're managing this setting
+        add_managed_setting(column_sym, setting_sym)
+
+        # Getter: returns true if value is in array, false otherwise
+        model_class.define_method(setting_sym) do
+          array = public_send(column_sym)
+          # Handle nil or non-array (validation will catch non-array)
+          return false unless array.is_a?(Array)
+          array.include?(value_to_store)
+        end
+
+        # Setter: adds to array when true, removes when false
+        model_class.define_method("#{setting_sym}=") do |enabled|
+          array = public_send(column_sym)
+          # Initialize as empty array if nil or non-array
+          array = [] unless array.is_a?(Array)
+          # Duplicate array to trigger dirty tracking
+          array = array.dup
+
+          if enabled
+            # Add value if not already present (avoid duplicates)
+            array << value_to_store unless array.include?(value_to_store)
+          else
+            # Remove all occurrences of the value
+            array.delete(value_to_store)
+          end
+
+          public_send("#{column_sym}=", array)
+        end
+
+        # Dirty tracking: _changed?
+        model_class.define_method("#{setting_sym}_changed?") do
+          return false unless public_send("#{column_sym}_changed?")
+
+          old_array = public_send("#{column_sym}_was") || []
+          new_array = public_send(column_sym) || []
+
+          # Compare membership, not array equality
+          old_value = old_array.is_a?(Array) && old_array.include?(value_to_store)
+          new_value = new_array.is_a?(Array) && new_array.include?(value_to_store)
+
+          old_value != new_value
+        end
+
+        # Dirty tracking: _was
+        model_class.define_method("#{setting_sym}_was") do
+          old_array = public_send("#{column_sym}_was") || []
+          old_array.is_a?(Array) && old_array.include?(value_to_store)
+        end
+
+        # Dirty tracking: _change
+        model_class.define_method("#{setting_sym}_change") do
+          return nil unless public_send("#{setting_sym}_changed?")
+
+          [public_send("#{setting_sym}_was"), public_send(setting_sym)]
+        end
+
+        # Add validation to ensure column is an array
+        # Use class instance variable to track which columns have validation
+        validated_columns = model_class.instance_variable_get(:@_array_validated_columns) || Set.new
+        unless validated_columns.include?(column_sym)
+          model_class.validates column_sym, array_type: true
+          validated_columns << column_sym
+          model_class.instance_variable_set(:@_array_validated_columns, validated_columns)
         end
       end
     end

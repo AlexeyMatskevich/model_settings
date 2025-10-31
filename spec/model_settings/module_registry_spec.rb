@@ -2,13 +2,14 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::ModuleRegistry do
   # Ensure clean slate for each test
   after do
     described_class.reset!
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".register_module" do
     it "stores module by name" do
       test_module = Module.new
@@ -17,9 +18,9 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(described_class.modules[:test_mod]).to eq(test_module)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".register_exclusive_group" do
     it "creates new group with module" do
       described_class.register_exclusive_group(:authorization, :pundit)
@@ -49,7 +50,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       end
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".register_option" do
     context "without validator" do
@@ -88,7 +89,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".extend_setting" do
     it "includes module in Setting class" do
       extension_module = Module.new do
@@ -103,7 +104,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(setting.custom_method).to eq("extended")
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".module_included?" do
     let(:test_module) { Module.new }
@@ -157,7 +158,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".on_setting_defined" do
     it "registers definition hook" do
       hook_called = false
@@ -166,9 +167,9 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(described_class.definition_hooks.size).to eq(1)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".on_settings_compiled" do
     it "registers compilation hook" do
       hook_called = false
@@ -177,7 +178,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(described_class.compilation_hooks.size).to eq(1)
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".validate_setting_options!" do
     let(:setting) { ModelSettings::Setting.new(:test, {viewable_by: [:admin]}) }
@@ -215,7 +216,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".execute_definition_hooks" do
     subject(:execute) { described_class.execute_definition_hooks(setting, model_class) }
 
@@ -240,9 +241,9 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
     # rubocop:enable RSpec/ExampleLength
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".execute_compilation_hooks" do
     subject(:execute) { described_class.execute_compilation_hooks(settings, model_class) }
 
@@ -267,7 +268,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
     # rubocop:enable RSpec/ExampleLength
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".check_exclusive_conflict!" do
     let(:pundit_module) { Module.new }
@@ -286,7 +287,9 @@ RSpec.describe ModelSettings::ModuleRegistry do
       described_class.register_exclusive_group(:authorization, :roles)
     end
 
-    context "when no conflicting modules are included" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no conflicting modules are included" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "does NOT raise error" do
         expect {
           described_class.check_exclusive_conflict!(model_class, :pundit)
@@ -360,7 +363,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
   end
 
-  # rubocop:disable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".reset!" do
     subject(:reset) { described_class.reset! }
 
@@ -386,5 +389,5 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(described_class.after_change_hooks).to be_empty
     end
   end
-  # rubocop:enable RSpecGuide/CharacteristicsAndContexts
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

@@ -1,5 +1,5 @@
 # RuboCop extensions configuration for StandardRB
-# Based on: https://github.com/AlexeyMatskevich/rspec-guide/blob/main/rubocop-configs/.rubocop.yml.example
+# Based on: https://github.com/AlexeyMatskevich/rubocop-rspec-guide
 
 require:
   - rubocop-rspec
@@ -88,7 +88,11 @@ FactoryBot/SyntaxMethods:
 
 # === RSpec Guide Custom Cops ===
 
+# Deprecated cop - renamed to MinimumBehavioralCoverage
 RSpecGuide/CharacteristicsAndContexts:
+  Enabled: false
+
+RSpecGuide/MinimumBehavioralCoverage:
   Enabled: true
 
 RSpecGuide/HappyPathFirst:
@@ -111,5 +115,5 @@ RSpecGuide/InvariantExamples:
 
 # === FactoryBot Guide Custom Cops ===
 
-FactoryBotGuide/DynamicAttributesForTimeAndRandom:
+FactoryBotGuide/DynamicAttributeEvaluation:
   Enabled: true

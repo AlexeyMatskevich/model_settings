@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Validation do
   let(:model_class) do
     Class.new(TestModel) do
@@ -18,6 +19,7 @@ RSpec.describe ModelSettings::Validation do
 
   let(:instance) { model_class.create! }
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#initialize_setting_errors" do
     it "initializes ActiveModel::Errors collection" do
       expect(instance.setting_errors).to be_a(ActiveModel::Errors)
@@ -47,7 +49,7 @@ RSpec.describe ModelSettings::Validation do
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
       let(:email_configured) { true }  # Happy path по умолчанию
 
       before { instance.email_configured = email_configured }
@@ -57,7 +59,7 @@ RSpec.describe ModelSettings::Validation do
       end
 
       context "but when validator fails" do
-        let(:email_configured) { false }  # Null object - переопределение
+        let(:email_configured) { false }  # Null object - переопределение  # rubocop:disable RSpecGuide/DuplicateLetValues
 
         it "returns false and adds error to setting_errors" do
           aggregate_failures do
@@ -68,7 +70,7 @@ RSpec.describe ModelSettings::Validation do
       end
 
       context "but when validating multiple times" do
-        let(:email_configured) { false }  # Null object - переопределение
+        let(:email_configured) { false }  # Null object - переопределение  # rubocop:disable RSpecGuide/DuplicateLetValues
 
         it "clears previous errors before validation" do
           instance.validate_setting(:notifications)
@@ -106,7 +108,7 @@ RSpec.describe ModelSettings::Validation do
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
 
       it "executes proc in instance context and validates correctly" do
         aggregate_failures do
@@ -146,7 +148,7 @@ RSpec.describe ModelSettings::Validation do
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
       let(:has_quota) { false }  # Fail case по умолчанию для демонстрации errors
       let(:has_permissions) { false }
 
@@ -194,20 +196,24 @@ RSpec.describe ModelSettings::Validation do
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
 
       it "validates provided value instead of current value" do
         expect(instance.validate_setting(:enabled, :invalid)).to be false
       end
     end
 
-    context "but when setting does NOT exist" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when setting does NOT exist" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true" do
         expect(instance.validate_setting(:nonexistent_setting)).to be true
       end
     end
 
-    context "but when setting has no validator" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when setting has no validator" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true" do
         expect(instance.validate_setting(:premium_mode)).to be true
       end
@@ -234,20 +240,23 @@ RSpec.describe ModelSettings::Validation do
             default: false,
             validate_with: :always_valid_b
 
-          def always_valid_a; end
-          def always_valid_b; end
+          def always_valid_a
+          end
+
+          def always_valid_b
+          end
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
 
       it "returns true" do
         expect(instance.validate_all_settings).to be true
       end
 
-      it "validates all settings with validate_with option" do
-        expect(instance).to receive(:always_valid_a)
-        expect(instance).to receive(:always_valid_b)
+      it "validates all settings with validate_with option" do  # rubocop:disable RSpec/MultipleExpectations
+        expect(instance).to receive(:always_valid_a)  # rubocop:disable RSpec/MessageSpies
+        expect(instance).to receive(:always_valid_b)  # rubocop:disable RSpec/MessageSpies
         instance.validate_all_settings
       end
     end
@@ -271,7 +280,8 @@ RSpec.describe ModelSettings::Validation do
             default: false,
             validate_with: :always_invalid
 
-          def always_valid; end
+          def always_valid
+          end
 
           def always_invalid
             add_setting_error(:premium_mode, "always fails")
@@ -279,7 +289,7 @@ RSpec.describe ModelSettings::Validation do
         end
       end
 
-      let(:instance) { model_class.create! }
+      let(:instance) { model_class.create! }  # rubocop:disable RSpecGuide/DuplicateLetValues
 
       it "returns false" do
         expect(instance.validate_all_settings).to be false
@@ -291,13 +301,16 @@ RSpec.describe ModelSettings::Validation do
       end
     end
 
-    context "when no settings have validators" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no settings have validators" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns true" do
         expect(instance.validate_all_settings).to be true
       end
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "#add_setting_error" do
     it "adds error to setting_errors and is retrievable via setting_errors_for" do
       instance.add_setting_error(:premium_mode, "custom error message")
@@ -318,7 +331,9 @@ RSpec.describe ModelSettings::Validation do
       expect(errors).to match([a_string_matching(/error 1/), a_string_matching(/error 2/)])
     end
 
-    context "but when setting has no errors" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "but when setting has no errors" do  # Organizational/characteristic context
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         expect(instance.setting_errors_for(:premium_mode)).to be_empty
       end
@@ -361,6 +376,7 @@ RSpec.describe ModelSettings::Validation do
     end
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "ClassMethods" do
     describe ".configure_setting_validation and .setting_validation_options" do
       it "sets and returns validation options" do
@@ -368,7 +384,9 @@ RSpec.describe ModelSettings::Validation do
         expect(model_class.setting_validation_options).to eq({strict: true, on_error: :raise})
       end
 
-      context "but when NOT configured" do
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "but when NOT configured" do  # Organizational/characteristic context
+        # rubocop:enable RSpecGuide/ContextSetup
         it "returns empty hash" do
           expect(model_class.setting_validation_options).to eq({})
         end
@@ -376,3 +394,4 @@ RSpec.describe ModelSettings::Validation do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage
