@@ -364,6 +364,128 @@ RSpec.describe ModelSettings::ModuleRegistry do
   end
 
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".before_setting_change" do
+    it "registers before_change hook" do
+      hook_called = false
+      described_class.before_setting_change { |_instance, _setting, _new_value| hook_called = true }
+
+      expect(described_class.before_change_hooks.size).to eq(1)
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".after_setting_change" do
+    it "registers after_change hook" do
+      hook_called = false
+      described_class.after_setting_change { |_instance, _setting, _old, _new| hook_called = true }
+
+      expect(described_class.after_change_hooks.size).to eq(1)
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".execute_before_change_hooks" do
+    subject(:execute) { described_class.execute_before_change_hooks(instance, setting, new_value) }
+
+    let(:instance) { instance_double(ActiveRecord::Base) }
+    let(:setting) { ModelSettings::Setting.new(:test) }
+    let(:new_value) { true }
+
+    # rubocop:disable RSpec/ExampleLength
+    it "calls hooks and passes correct arguments", :aggregate_failures do
+      call_count = 0
+      received_instance = nil
+      received_setting = nil
+      received_new_value = nil
+      described_class.before_setting_change { |_i, _s, _v| call_count += 1 }
+      described_class.before_setting_change { |i, s, v|
+        call_count += 1
+        received_instance = i
+        received_setting = s
+        received_new_value = v
+      }
+      execute
+      expect(call_count).to eq(2)
+      expect(received_instance).to eq(instance)
+      expect(received_setting).to eq(setting)
+      expect(received_new_value).to eq(new_value)
+    end
+    # rubocop:enable RSpec/ExampleLength
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".execute_after_change_hooks" do
+    subject(:execute) { described_class.execute_after_change_hooks(instance, setting, old_value, new_value) }
+
+    let(:instance) { instance_double(ActiveRecord::Base) }
+    let(:setting) { ModelSettings::Setting.new(:test) }
+    let(:old_value) { false }
+    let(:new_value) { true }
+
+    # rubocop:disable RSpec/ExampleLength
+    it "calls hooks and passes correct arguments", :aggregate_failures do
+      call_count = 0
+      received_instance = nil
+      received_setting = nil
+      received_old_value = nil
+      received_new_value = nil
+      described_class.after_setting_change { |_i, _s, _o, _n| call_count += 1 }
+      described_class.after_setting_change { |i, s, o, n|
+        call_count += 1
+        received_instance = i
+        received_setting = s
+        received_old_value = o
+        received_new_value = n
+      }
+      execute
+      expect(call_count).to eq(2)
+      expect(received_instance).to eq(instance)
+      expect(received_setting).to eq(setting)
+      expect(received_old_value).to eq(old_value)
+      expect(received_new_value).to eq(new_value)
+    end
+    # rubocop:enable RSpec/ExampleLength
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".module_registered?" do
+    before do
+      described_class.register_module(:test_mod, Module.new)
+    end
+
+    it "returns true when module is registered" do
+      expect(described_class.module_registered?(:test_mod)).to be true
+    end
+
+    it "returns false when module is NOT registered" do
+      expect(described_class.module_registered?(:nonexistent)).to be false
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".get_module" do
+    let(:test_module) { Module.new }
+
+    before do
+      described_class.register_module(:test_mod, test_module)
+    end
+
+    it "returns the module when registered" do
+      expect(described_class.get_module(:test_mod)).to eq(test_module)
+    end
+
+    it "returns nil when module is NOT registered" do
+      expect(described_class.get_module(:nonexistent)).to be_nil
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".reset!" do
     subject(:reset) { described_class.reset! }
 
@@ -390,4 +512,140 @@ RSpec.describe ModelSettings::ModuleRegistry do
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  # rubocop:disable RSpec/MultipleMemoizedHelpers, RSpecGuide/MinimumBehavioralCoverage
+  describe "integration: full module lifecycle" do
+    let(:model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
+
+        def self.name
+          "IntegrationTestModel"
+        end
+
+        include ModelSettings::DSL
+      end
+    end
+
+    let(:instance) { model_class.create! }
+    let(:definition_hook_calls) { [] }
+    let(:compilation_hook_calls) { [] }
+    let(:before_change_calls) { [] }
+    let(:after_change_calls) { [] }
+
+    before do
+      # Register option with validator
+      described_class.register_option(:audit_level) do |setting, value|
+        valid_levels = [:none, :basic, :full]
+        unless valid_levels.include?(value)
+          raise ArgumentError, "audit_level must be one of #{valid_levels.inspect}"
+        end
+      end
+
+      # Register definition hook
+      described_class.on_setting_defined do |setting, model|
+        audit_level = setting.options[:audit_level]
+        if audit_level
+          definition_hook_calls << {setting: setting.name, model: model.name, level: audit_level}
+        end
+      end
+
+      # Register compilation hook
+      described_class.on_settings_compiled do |settings, model|
+        audited = settings.select { |s| s.options[:audit_level] && s.options[:audit_level] != :none }
+        compilation_hook_calls << {model: model.name, count: audited.size}
+      end
+
+      # Register before_change hook
+      described_class.before_setting_change do |inst, setting, new_value|
+        audit_level = setting.options[:audit_level]
+        if audit_level && audit_level != :none
+          before_change_calls << {instance_id: inst.id, setting: setting.name, new_value: new_value}
+        end
+      end
+
+      # Register after_change hook
+      described_class.after_setting_change do |inst, setting, old_val, new_val|
+        audit_level = setting.options[:audit_level]
+        if audit_level && audit_level != :none
+          after_change_calls << {
+            instance_id: inst.id,
+            setting: setting.name,
+            old_value: old_val,
+            new_value: new_val,
+            level: audit_level
+          }
+        end
+      end
+    end
+
+    context "when defining settings with custom options" do
+      before do
+        model_class.setting :tracked_setting,
+          type: :column,
+          audit_level: :full
+
+        model_class.setting :normal_setting,
+          type: :column
+
+        model_class.compile_settings!
+      end
+
+      it "executes definition hooks for each setting" do
+        expect(definition_hook_calls).to contain_exactly(
+          {setting: :tracked_setting, model: "IntegrationTestModel", level: :full}
+        )
+      end
+
+      it "executes compilation hook once with all settings" do
+        expect(compilation_hook_calls).to contain_exactly(
+          {model: "IntegrationTestModel", count: 1}
+        )
+      end
+
+      # rubocop:disable RSpec/ExampleLength, RSpec/MultipleExpectations
+      it "hooks are registered and ready for runtime execution" do
+        # Verify hooks are registered
+        expect(described_class.before_change_hooks).not_to be_empty
+        expect(described_class.after_change_hooks).not_to be_empty
+
+        # Simulate runtime execution
+        tracked_setting_obj = model_class.find_setting(:tracked_setting)
+        normal_setting_obj = model_class.find_setting(:normal_setting)
+        mock_instance = instance_double(ActiveRecord::Base, id: 1)
+
+        # Execute hooks for tracked setting
+        described_class.execute_before_change_hooks(mock_instance, tracked_setting_obj, true)
+        described_class.execute_after_change_hooks(mock_instance, tracked_setting_obj, false, true)
+
+        # Execute hooks for normal setting
+        described_class.execute_before_change_hooks(mock_instance, normal_setting_obj, true)
+        described_class.execute_after_change_hooks(mock_instance, normal_setting_obj, false, true)
+
+        # Verify tracked setting triggered hooks
+        expect(before_change_calls).to contain_exactly(
+          {instance_id: 1, setting: :tracked_setting, new_value: true}
+        )
+        expect(after_change_calls).to contain_exactly(
+          hash_including(
+            instance_id: 1,
+            setting: :tracked_setting,
+            old_value: false,
+            new_value: true,
+            level: :full
+          )
+        )
+      end
+      # rubocop:enable RSpec/ExampleLength, RSpec/MultipleExpectations
+    end
+
+    it "raises ArgumentError when option validation fails" do
+      expect {
+        model_class.setting :invalid_setting,
+          type: :column,
+          audit_level: :invalid_level
+      }.to raise_error(ArgumentError, /audit_level must be one of/)
+    end
+  end
+  # rubocop:enable RSpec/MultipleMemoizedHelpers, RSpecGuide/MinimumBehavioralCoverage
 end

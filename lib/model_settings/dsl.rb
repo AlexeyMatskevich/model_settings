@@ -29,9 +29,6 @@ module ModelSettings
       include ModelSettings::Deprecation
       include ModelSettings::Query
 
-      # Include optional modules if available
-      include ModelSettings::Modules::I18n if defined?(ModelSettings::Modules::I18n)
-
       # Store all settings defined on this model
       class_attribute :_settings, default: []
 
@@ -44,11 +41,72 @@ module ModelSettings
       # Track active modules for this model
       class_attribute :_active_modules, default: []
 
+      # Auto-include I18n module if available (for backward compatibility)
+      if defined?(ModelSettings::Modules::I18n)
+        include ModelSettings::Modules::I18n
+
+        _active_modules << :i18n unless _active_modules.include?(:i18n)
+      end
+
+      # Auto-include default modules from configuration
+      ModelSettings::DSL.auto_include_default_modules(self)
+
       # Dependency engine for cascades and syncs
       class_attribute :_dependency_engine
 
       # Hook into ActiveRecord lifecycle for cascades and syncs
       before_save :apply_setting_cascades_and_syncs if respond_to?(:before_save)
+    end
+
+    # Auto-include default modules from configuration
+    #
+    # This method is called during DSL inclusion to automatically include
+    # modules specified in ModelSettings.configuration.default_modules
+    #
+    # @param base [Class] The class that included ModelSettings::DSL
+    # @return [void]
+    def self.auto_include_default_modules(base)
+      default_modules = ModelSettings.configuration.default_modules
+      return if default_modules.nil? || default_modules.empty?
+
+      default_modules.each do |module_name|
+        module_class = resolve_module(module_name)
+        next unless module_class
+
+        # Include module if not already included
+        unless base.included_modules.include?(module_class)
+          base.include module_class
+          base._active_modules << module_name
+        end
+      end
+    end
+
+    # Resolve module name (symbol) to module class
+    #
+    # Supports both built-in modules and external modules via constantize.
+    #
+    # @param module_name [Symbol] Module name (:roles, :pundit, :action_policy, :i18n, etc.)
+    # @return [Module, nil] Module class or nil if not found
+    #
+    # @example
+    #   resolve_module(:roles)        # => ModelSettings::Modules::Roles
+    #   resolve_module(:custom_module) # => ModelSettings::Modules::CustomModule (if exists)
+    def self.resolve_module(module_name)
+      case module_name
+      when :roles
+        ModelSettings::Modules::Roles
+      when :pundit
+        ModelSettings::Modules::Pundit
+      when :action_policy
+        ModelSettings::Modules::ActionPolicy
+      when :i18n
+        ModelSettings::Modules::I18n
+      else
+        # Try to constantize for external modules
+        "ModelSettings::Modules::#{module_name.to_s.camelize}".safe_constantize
+      end
+    rescue NameError
+      nil
     end
 
     class_methods do

@@ -360,4 +360,177 @@ RSpec.describe ModelSettings::DSL do
       end
     end
   end
+
+  # Configuration auto-include functionality
+  describe "auto-include default modules" do
+    subject(:include_dsl) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "test_models"
+        include ModelSettings::DSL
+      end
+    end
+
+    around do |example|
+      example.run
+    ensure
+      ModelSettings.reset_configuration!
+    end
+
+    # Happy path: modules are auto-included
+    context "when default_modules is configured" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = [:roles, :i18n]
+        end
+      end
+
+      it "auto-includes Roles module" do
+        expect(include_dsl.included_modules).to include(ModelSettings::Modules::Roles)
+      end
+
+      it "auto-includes I18n module" do
+        expect(include_dsl.included_modules).to include(ModelSettings::Modules::I18n)
+      end
+
+      it "tracks active modules" do
+        expect(include_dsl._active_modules).to match_array([:roles, :i18n])
+      end
+    end
+
+    # Reverse case: empty configuration
+    context "but when default_modules is empty" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = []
+        end
+      end
+
+      it "does not include optional modules" do
+        optional_modules = [
+          ModelSettings::Modules::Roles,
+          ModelSettings::Modules::Pundit,
+          ModelSettings::Modules::ActionPolicy
+        ]
+        expect(include_dsl.included_modules).not_to include(*optional_modules)
+      end
+
+      it "only includes I18n module (for backward compatibility)" do
+        expect(include_dsl._active_modules).to eq([:i18n])
+      end
+    end
+
+    context "but when default_modules is nil" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = nil
+        end
+      end
+
+      it "does not raise error" do
+        expect { include_dsl }.not_to raise_error
+      end
+    end
+
+    # Error handling: unknown module
+    context "but when configured module does not exist" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = [:nonexistent_module]
+        end
+      end
+
+      it "skips unknown module gracefully" do
+        expect { include_dsl }.not_to raise_error
+      end
+
+      it "does not track unknown module (only I18n)" do
+        expect(include_dsl._active_modules).to eq([:i18n])
+      end
+    end
+
+    # Edge case: module already included manually
+    context "when module is already included" do
+      subject(:include_dsl) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "test_models"
+          include ModelSettings::Modules::Roles # Manual include first
+          include ModelSettings::DSL
+        end
+      end
+
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = [:roles]
+        end
+      end
+
+      it "does not include module twice" do
+        roles_count = include_dsl.included_modules.count(ModelSettings::Modules::Roles)
+        expect(roles_count).to eq(1)
+      end
+    end
+
+    # Variant: testing with single module
+    context "with single module configured" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = [:i18n]
+        end
+      end
+
+      it "includes the configured module" do
+        expect(include_dsl.included_modules).to include(ModelSettings::Modules::I18n)
+      end
+
+      it "tracks the active module" do
+        expect(include_dsl._active_modules).to eq([:i18n])
+      end
+    end
+
+    # Partial list (some modules exist, some don't)
+    context "with mixed valid and invalid modules" do
+      before do
+        ModelSettings.configure do |config|
+          config.default_modules = [:roles, :nonexistent, :i18n]
+        end
+      end
+
+      it "includes only valid modules" do
+        expect(include_dsl.included_modules).to include(
+          ModelSettings::Modules::Roles,
+          ModelSettings::Modules::I18n
+        )
+      end
+
+      it "tracks only valid modules" do
+        expect(include_dsl._active_modules).to match_array([:roles, :i18n])
+      end
+    end
+  end
+
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
+  describe ".resolve_module" do
+    # Happy path: built-in modules
+    it "resolves :roles to Roles module" do
+      expect(described_class.resolve_module(:roles)).to eq(ModelSettings::Modules::Roles)
+    end
+
+    it "resolves :pundit to Pundit module" do
+      expect(described_class.resolve_module(:pundit)).to eq(ModelSettings::Modules::Pundit)
+    end
+
+    it "resolves :action_policy to ActionPolicy module" do
+      expect(described_class.resolve_module(:action_policy)).to eq(ModelSettings::Modules::ActionPolicy)
+    end
+
+    it "resolves :i18n to I18n module" do
+      expect(described_class.resolve_module(:i18n)).to eq(ModelSettings::Modules::I18n)
+    end
+
+    # Reverse case: unknown module
+    it "returns nil for nonexistent module" do
+      expect(described_class.resolve_module(:nonexistent)).to be_nil
+    end
+  end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

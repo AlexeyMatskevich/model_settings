@@ -34,6 +34,7 @@ Gem::Specification.new do |spec|
   # Runtime dependencies
   spec.add_dependency "activesupport", ">= 5.2"
   spec.add_dependency "activerecord", ">= 5.2"
+  spec.add_dependency "railties", ">= 5.2" # For Rails generators
 
   # Development dependencies
   spec.add_development_dependency "sqlite3", "~> 2.0"

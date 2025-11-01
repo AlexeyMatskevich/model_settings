@@ -15,6 +15,56 @@ end
 
 ## Available Options
 
+### default_modules
+
+Configure which optional modules to auto-include when a model includes `ModelSettings::DSL`.
+
+```ruby
+ModelSettings.configure do |config|
+  config.default_modules = [:roles, :i18n]  # Default: []
+end
+```
+
+Available built-in modules:
+- `:roles` - Role-based authorization
+- `:pundit` - Pundit integration
+- `:action_policy` - ActionPolicy integration
+- `:i18n` - Internationalization (auto-included for backward compatibility)
+
+**Note**: Authorization modules (`:roles`, `:pundit`, `:action_policy`) are mutually exclusive - you can only use one per model.
+
+**Example with auto-include**:
+
+```ruby
+# config/initializers/model_settings.rb
+ModelSettings.configure do |config|
+  config.default_modules = [:roles, :i18n]
+end
+
+# app/models/user.rb
+class User < ApplicationRecord
+  include ModelSettings::DSL  # Automatically includes Roles and I18n modules
+
+  setting :premium_mode,
+    viewable_by: :all,      # From Roles module
+    editable_by: :admin     # From Roles module
+end
+```
+
+**Without auto-include** (manual approach):
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles  # Manual include
+  include ModelSettings::Modules::I18n   # Manual include
+
+  setting :premium_mode,
+    viewable_by: :all,
+    editable_by: :admin
+end
+```
+
 ### inherit_settings
 
 Control whether child classes inherit parent settings.
@@ -87,5 +137,6 @@ User.inherit_settings  # => true
 
 | Option | Default | Purpose |
 |--------|---------|---------|
+| `default_modules` | `[]` | Auto-include optional modules when including DSL |
 | `inherit_settings` | `true` | Child classes inherit parent settings |
 | `inherit_authorization` | `true` | Child settings inherit parent auth rules |

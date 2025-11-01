@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-11-01
+
+### Added
+- **Module Development Contract**: Complete API for creating external modules
+  - ModuleRegistry API fully documented with lifecycle hooks
+  - `register_module`: Register custom modules for tracking
+  - `register_option`: Register custom DSL options with validators
+  - `register_exclusive_group`: Define mutually exclusive modules
+  - `check_exclusive_conflict!`: Prevent conflicting module inclusion
+  - `extend_setting`: Add methods to Setting class
+  - Lifecycle hooks: `on_setting_defined`, `on_settings_compiled`, `before_setting_change`, `after_setting_change`
+  - 12 new comprehensive tests for ModuleRegistry (37 total examples)
+  - Integration tests for full module lifecycle
+
+- **Rails Generator for Modules**: Create custom modules with `rails generate`
+  - Command: `rails generate model_settings:module ModuleName`
+  - Options: `--skip-tests`, `--skip-docs`, `--exclusive-group=NAME`, `--options=name:type`
+  - Auto-generates module implementation with TODO comments
+  - Auto-generates RSpec tests following project conventions
+  - Auto-generates comprehensive markdown documentation
+  - Support for custom option types: symbol, boolean, string, array, hash
+  - Smart name conversion (CamelCase ↔ snake_case)
+  - 180 lines of generator tests
+
+- **Configuration Auto-Include**: New method for default module inclusion
+  - `auto_include_default_modules` method for including default modules automatically
+  - Configurable list of modules to include by default
+  - 13 comprehensive RSpec examples
+  - Simplifies common module inclusion patterns
+
+### Documentation
+- **Created `docs/guides/module_development.md`**: Comprehensive module development guide
+  - Complete API reference for ModuleRegistry (850 lines)
+  - Lifecycle hooks documentation with execution order
+  - Best practices for module development (8 key guidelines)
+  - Complete working example: AuditTrail module
+  - Testing guidance and patterns
+  - Quick start with generator instructions
+
+
+### Generator Templates
+- **`lib/generators/model_settings/module/templates/module.rb.tt`**: Module implementation template
+  - Complete module structure with all lifecycle hooks
+  - Support for exclusive groups and custom options
+  - ClassMethods and instance methods scaffolding
+  - TODO comments guiding implementation
+
+- **`lib/generators/model_settings/module/templates/module_spec.rb.tt`**: RSpec test template
+  - Module registration tests
+  - Exclusive group conflict tests
+  - Custom option registration and validation tests
+  - Lifecycle hooks tests
+  - 150+ lines of test scaffolding
+
+- **`lib/generators/model_settings/module/templates/module_docs.md.tt`**: Documentation template
+  - Installation and usage sections
+  - Available options reference
+  - Class and instance methods documentation
+  - Examples (basic and advanced)
+  - Configuration and troubleshooting sections
+
+### Test Coverage
+- 985 total examples (up from 955)
+- +30 new tests (12 ModuleRegistry + 13 Configuration + 5 generator integration)
+- All tests passing with 0 failures
+- 0 linter offenses
+
+### Changed
+- ModuleRegistry now has comprehensive test coverage for all hook types
+- Configuration module enhanced with auto-include functionality
+- Sprint roadmap reorganized for clarity (Sprint 13: Authorization, Sprint 14: I18n + Polish)
+
+### Breaking Changes Policy
+- **Pre-1.0 Policy Established**: Breaking changes allowed freely before v1.0
+- No real users yet, so no compatibility constraints
+- Freedom to improve API, refactor architecture, change defaults
+- After v1.0: Strict SemVer with deprecation periods
+
 ## [0.6.0] - 2025-10-31
 
 ### Added

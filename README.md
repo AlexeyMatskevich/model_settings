@@ -15,6 +15,7 @@ Declarative configuration management DSL for Rails models with support for multi
 | Authorization | [Roles](docs/modules/roles.md), [Pundit](docs/modules/pundit.md), [ActionPolicy](docs/modules/action_policy.md) |
 | Settings Inheritance | [Inheritance Guide](docs/core/inheritance.md) |
 | Validation & Callbacks | [Validation](docs/core/validation.md), [Callbacks](docs/core/callbacks.md) |
+| **Module Development** | [Module Development Guide](docs/guides/module_development.md) - Create custom modules |
 | Real-World Examples | [Usage Cases](docs/usage_cases/) |
 
 ## Features
@@ -29,6 +30,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Documentation Generator** - Auto-generate Markdown/JSON documentation
 - **Query Interface** - Find and filter settings by metadata
 - **I18n Support** - Full internationalization
+- **Module Development API** - Create custom modules with Rails generator
 
 ## Installation
 
@@ -133,24 +135,39 @@ rake settings:audit:deprecated
 
 **[→ See Documentation Module guide](docs/modules/documentation.md)**
 
+## Module Development
+
+Create custom modules with Rails generator:
+
+```bash
+rails generate model_settings:module AuditTrail
+```
+
+**[→ See Module Development Guide](docs/guides/module_development.md)**
+
 ## Roadmap
 
 ### Completed ✅
 
-- ✅ Sprint 1-8: Core features (adapters, dependencies, validation, callbacks, inheritance)
+- ✅ Sprint 1-10: Core features (adapters, dependencies, validation, callbacks, inheritance)
 - ✅ Sprint 9: JSON Array Membership implementation
+- ✅ Sprint 10: Metadata Query API & Around Callbacks
+- ✅ Sprint 11: Module Development API & Rails Generator (v0.7.0)
 - ✅ Authorization modules (Roles, Pundit, ActionPolicy)
 - ✅ Documentation Generator module
 - ✅ I18n module
 - ✅ Comprehensive documentation structure
 
-### Planned
+**Current Status**: v0.7.0 - 985 tests passing, ~75% spec compliance
 
-- ⏳ UI Module - Admin interface components
-- ⏳ Plans Module - Subscription/plan management
-- ⏳ Additional modules based on community feedback
+### Next Up
 
-**[→ See detailed roadmap](docs/PLAN.md)**
+- 🔄 Sprint 12: Tooling & Production Hardening (v0.8.0)
+- 🔄 Sprint 13: Authorization Inheritance System (v0.9.0)
+- 🔄 Sprint 14: I18n Dual API & Final Polish (v0.9.x)
+- ⏳ v1.0: Manual review and release decision
+
+**Note**: Pre-1.0 versions allow breaking changes for API improvements.
 
 ## Development
 

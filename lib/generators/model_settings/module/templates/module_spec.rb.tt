@@ -1,0 +1,191 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe ModelSettings::Modules::<%= module_class_name %> do
+  let(:model_class) do
+    Class.new(ActiveRecord::Base) do
+      self.table_name = "test_models"
+
+      def self.name
+        "<%= module_class_name %>TestModel"
+      end
+
+      include ModelSettings::DSL
+      include ModelSettings::Modules::<%= module_class_name %>
+    end
+  end
+
+  let(:instance) { model_class.create! }
+
+  describe "module registration" do
+    it "registers module in registry" do
+      expect(ModelSettings::ModuleRegistry.module_registered?(<%= module_symbol_name %>)).to be true
+    end
+
+    it "adds module to active modules list" do
+      expect(model_class._active_modules).to include(<%= module_symbol_name %>)
+    end
+  end
+
+<%- if exclusive_group? -%>
+  describe "exclusive group" do
+    it "registers in <%= exclusive_group_name %> exclusive group" do
+      exclusive_groups = ModelSettings::ModuleRegistry.exclusive_groups
+      expect(exclusive_groups[<%= exclusive_group_symbol %>]).to include(<%= module_symbol_name %>)
+    end
+
+    context "when conflicting module is already included" do
+      let(:conflicting_model) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "test_models"
+          include ModelSettings::DSL
+          # Include another module from the same exclusive group first
+        end
+      end
+
+      it "raises ExclusiveGroupConflictError" do
+        expect {
+          conflicting_model.include(ModelSettings::Modules::<%= module_class_name %>)
+        }.to raise_error(ModelSettings::ModuleRegistry::ExclusiveGroupConflictError)
+      end
+    end
+  end
+
+<%- end -%>
+<%- if has_custom_options? -%>
+  describe "option registration" do
+<%- custom_options.each do |opt| -%>
+    it "registers <%= opt[:symbol] %> option" do
+      expect(ModelSettings::ModuleRegistry.registered_options).to have_key(<%= opt[:symbol] %>)
+    end
+
+    context "when <%= opt[:name] %> has invalid value" do
+      it "raises ArgumentError during setting definition" do
+        expect {
+          model_class.setting :test_setting,
+            type: :column,
+            <%= opt[:symbol] %>: :invalid_value
+        }.to raise_error(ArgumentError)
+      end
+    end
+
+<%- end -%>
+  end
+
+  describe "setting with <%= module_file_name %> options" do
+    before do
+      model_class.setting :example_setting,
+        type: :column,
+<%- custom_options.each do |opt| -%>
+        <%= opt[:symbol] %>: :valid_value,
+<%- end -%>
+        default: false
+    end
+
+    it "stores options in setting" do
+      setting = model_class.find_setting(:example_setting)
+<%- custom_options.each do |opt| -%>
+      expect(setting.options[<%= opt[:symbol] %>]).to eq(:valid_value)
+<%- end -%>
+    end
+  end
+
+<%- else -%>
+  describe "basic functionality" do
+    before do
+      model_class.setting :example_setting, type: :column, default: false
+      model_class.compile_settings!
+    end
+
+    it "processes settings correctly" do
+      setting = model_class.find_setting(:example_setting)
+      expect(setting).to be_present
+    end
+  end
+
+<%- end -%>
+  describe ".settings_with_<%= module_file_name %>" do
+    before do
+      model_class.setting :with_<%= module_file_name %>,
+        type: :column,
+<%- if has_custom_options? -%>
+        <%= custom_options.first[:symbol] %>: :value,
+<%- end -%>
+        default: false
+
+      model_class.setting :without_<%= module_file_name %>,
+        type: :column,
+        default: false
+    end
+
+    it "returns only settings with <%= module_file_name %> options" do
+      result = model_class.settings_with_<%= module_file_name %>
+<%- if has_custom_options? -%>
+      expect(result.map(&:name)).to eq([:with_<%= module_file_name %>])
+<%- else -%>
+      expect(result).to be_an(Array)
+<%- end -%>
+    end
+  end
+
+  describe "#<%= module_file_name %>_for" do
+    before do
+      model_class.setting :test_setting,
+        type: :column,
+<%- if has_custom_options? -%>
+        <%= custom_options.first[:symbol] %>: :test_value,
+<%- end -%>
+        default: false
+    end
+
+    it "returns expected value" do
+<%- if has_custom_options? -%>
+      expect(instance.<%= module_file_name %>_for(:test_setting)).to eq(:test_value)
+<%- else -%>
+      result = instance.<%= module_file_name %>_for(:test_setting)
+      expect(result).to be_present
+<%- end -%>
+    end
+
+    context "but when setting does not exist" do
+      it "returns nil" do
+        expect(instance.<%= module_file_name %>_for(:nonexistent)).to be_nil
+      end
+    end
+  end
+
+  describe "lifecycle hooks" do
+    let(:definition_calls) { [] }
+    let(:compilation_calls) { [] }
+
+    before do
+      # Track hook calls
+      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model|
+        definition_calls << setting.name if model == model_class
+      end
+
+      ModelSettings::ModuleRegistry.on_settings_compiled do |settings, model|
+        compilation_calls << settings.size if model == model_class
+      end
+
+      model_class.setting :hook_test, type: :column
+      model_class.compile_settings!
+    end
+
+    it "executes definition hooks" do
+      expect(definition_calls).to include(:hook_test)
+    end
+
+    it "executes compilation hooks" do
+      expect(compilation_calls).not_to be_empty
+    end
+  end
+
+  # TODO: Add more tests for your module-specific logic
+  # - Test definition-time validation
+  # - Test compilation-time indexing
+  # - Test runtime behavior
+  # - Test edge cases
+  # - Test error handling
+end

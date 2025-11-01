@@ -1,0 +1,155 @@
+# <%= module_class_name %>
+
+<!-- TODO: Add brief description of what this module does -->
+
+## Installation
+
+This module is included in ModelSettings. No additional gems required.
+
+## Usage
+
+### Basic Setup
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::<%= module_class_name %>
+
+  setting :example_setting,
+          type: :column,
+<%- if has_custom_options? -%>
+<%- custom_options.each do |opt| -%>
+          <%= opt[:symbol] %>: value,
+<%- end -%>
+<%- end -%>
+          default: false
+end
+```
+
+<%- if has_custom_options? -%>
+### Available Options
+
+<%- custom_options.each do |opt| -%>
+#### `<%= opt[:name] %>`
+
+<!-- TODO: Add description of what this option does -->
+
+**Type:** <%= opt[:type].capitalize %>
+**Valid values:** <!-- TODO: List valid values -->
+**Default:** None (must be specified)
+
+**Example:**
+```ruby
+setting :my_setting,
+        type: :column,
+        <%= opt[:symbol] %>: :value
+```
+
+<%- end -%>
+<%- end -%>
+### Class Methods
+
+#### `.settings_with_<%= module_file_name %>`
+
+<!-- TODO: Add description -->
+
+**Returns:** `Array<Setting>` - Settings processed by this module
+
+**Example:**
+```ruby
+User.settings_with_<%= module_file_name %>
+# => [#<ModelSettings::Setting name=:example_setting>, ...]
+```
+
+### Instance Methods
+
+#### `#<%= module_file_name %>_for(setting_name)`
+
+<!-- TODO: Add description -->
+
+**Parameters:**
+- `setting_name` (Symbol) - Name of the setting
+
+**Returns:** <!-- TODO: Specify return type -->
+
+**Example:**
+```ruby
+user.<%= module_file_name %>_for(:example_setting)
+# => <!-- TODO: Show example output -->
+```
+
+## Examples
+
+### Example 1: Basic Usage
+
+<!-- TODO: Add basic usage example with explanation -->
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::<%= module_class_name %>
+
+  # TODO: Add example setting
+end
+```
+
+### Example 2: Advanced Usage
+
+<!-- TODO: Add advanced usage example with explanation -->
+
+```ruby
+# TODO: Add code example
+```
+
+## Configuration
+
+<!-- TODO: Add any configuration options if applicable -->
+
+<%- if exclusive_group? -%>
+## Exclusive Group
+
+This module is part of the `<%= exclusive_group_name %>` exclusive group. You can only use ONE module from this group at a time.
+
+**Other modules in this group:**
+<!-- TODO: List other modules in the same group -->
+
+<%- end -%>
+## Implementation Details
+
+<!-- TODO: Add technical details about how the module works -->
+
+### Lifecycle Hooks
+
+This module uses the following lifecycle hooks:
+
+- **`on_setting_defined`** - <!-- TODO: Describe what happens at definition time -->
+- **`on_settings_compiled`** - <!-- TODO: Describe what happens at compilation time -->
+- **`before_setting_change`** - <!-- TODO: Describe what happens before changes -->
+- **`after_setting_change`** - <!-- TODO: Describe what happens after changes -->
+
+## Related Documentation
+
+- [Module Development API](../architecture/module_development_api.md)
+- [Configuration](../core/configuration.md)
+<!-- TODO: Add links to related modules or documentation -->
+
+## FAQ
+
+<!-- TODO: Add frequently asked questions -->
+
+## Troubleshooting
+
+<!-- TODO: Add common issues and solutions -->
+
+## Contributing
+
+To modify or extend this module:
+
+1. Edit `lib/model_settings/modules/<%= module_file_name %>.rb`
+2. Update tests in `spec/model_settings/modules/<%= module_file_name %>_spec.rb`
+3. Run tests: `bundle exec rspec spec/model_settings/modules/<%= module_file_name %>_spec.rb`
+4. Update this documentation
+
+## License
+
+<!-- TODO: Add license information if needed -->

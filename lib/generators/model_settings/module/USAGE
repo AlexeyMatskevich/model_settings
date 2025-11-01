@@ -1,0 +1,48 @@
+Description:
+    Generates a custom ModelSettings module with full structure including
+    implementation file, tests, and documentation.
+
+Example:
+    rails generate model_settings:module AuditTrail
+
+    This will create:
+        lib/model_settings/modules/audit_trail.rb
+        spec/model_settings/modules/audit_trail_spec.rb
+        docs/modules/audit_trail.md
+
+Options:
+    --skip-tests
+        Skip generating test file
+
+    --skip-docs
+        Skip generating documentation file
+
+    --exclusive-group=NAME
+        Register module in an exclusive group (e.g., 'authorization')
+        Only one module from the same exclusive group can be active at a time
+
+    --options=OPTION:TYPE [OPTION2:TYPE2 ...]
+        Register custom DSL options with validators
+        Available types: symbol, boolean, string, array, hash
+
+Examples:
+    # Basic module
+    rails generate model_settings:module AuditTrail
+
+    # Module in exclusive group
+    rails generate model_settings:module CustomAuth --exclusive-group=authorization
+
+    # Module with custom options
+    rails generate model_settings:module Workflow --options=state:symbol notify:boolean
+
+    # Skip tests and documentation
+    rails generate model_settings:module SimpleModule --skip-tests --skip-docs
+
+After generation:
+    1. Edit lib/model_settings/modules/your_module.rb
+    2. Implement your module logic (search for TODO comments)
+    3. Run tests: bundle exec rspec spec/model_settings/modules/your_module_spec.rb
+    4. Update documentation in docs/modules/your_module.md
+
+For detailed information, see:
+    docs/architecture/module_development_api.md

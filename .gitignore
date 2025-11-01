@@ -8,6 +8,7 @@
 /tmp/
 /.devbox/
 /llm_docs/
+/.claude/
 # rspec failure tracking
 .rspec_status
 PLAN.md

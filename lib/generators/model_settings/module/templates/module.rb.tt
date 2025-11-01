@@ -1,0 +1,163 @@
+# frozen_string_literal: true
+
+module ModelSettings
+  module Modules
+    # <%= module_class_name %> module for ModelSettings
+    #
+    # TODO: Add description of what this module does
+    #
+    # @example Basic usage
+    #   class User < ApplicationRecord
+    #     include ModelSettings::DSL
+    #     include ModelSettings::Modules::<%= module_class_name %>
+    #
+    #     setting :example_setting,
+    #             type: :column,
+<%- if has_custom_options? -%>
+<%- custom_options.each do |opt| -%>
+    #             <%= opt[:symbol] %>: value,
+<%- end -%>
+<%- end -%>
+    #             default: false
+    #   end
+    #
+    module <%= module_class_name %>
+      extend ActiveSupport::Concern
+
+      included do
+        # Register module for tracking
+        ModelSettings::ModuleRegistry.register_module(<%= module_symbol_name %>, self)
+
+<%- if exclusive_group? -%>
+        # Register as part of exclusive group
+        ModelSettings::ModuleRegistry.register_exclusive_group(<%= exclusive_group_symbol %>, <%= module_symbol_name %>)
+
+        # Check for conflicts with other modules in the same group
+        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, <%= module_symbol_name %>)
+
+<%- end -%>
+<%- if has_custom_options? -%>
+        # Register custom DSL options
+<%- custom_options.each do |opt| -%>
+        ModelSettings::ModuleRegistry.register_option(<%= opt[:symbol] %>) do |setting, value|
+          <%= opt[:validator_example] %>
+        end
+
+<%- end -%>
+<%- end -%>
+        # Definition-time hook: called when setting is defined
+        ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+<%- if has_custom_options? -%>
+          # Process your custom options
+<%- custom_options.each do |opt| -%>
+          if setting.options[<%= opt[:symbol] %>]
+            # TODO: Add validation or processing for <%= opt[:name] %>
+          end
+<%- end -%>
+<%- else -%>
+          # TODO: Add setting definition logic here
+          # Examples:
+          # - Validate option combinations
+          # - Compute derived metadata
+          # - Store option values
+<%- end -%>
+        end
+
+        # Compilation-time hook: called after all settings defined
+        # ⚠️ MUST be idempotent (may run multiple times in development)
+        ModelSettings::ModuleRegistry.on_settings_compiled do |settings, model_class|
+          # TODO: Add compilation logic here (MUST be idempotent!)
+          # Examples:
+          # - Build indexes for fast runtime lookups
+          # - Validate relationships across settings
+          # - Pre-compute expensive operations
+          #
+          # ⚠️ Always clear previous state first:
+          # model_class._my_index = {}  # Clear previous (idempotent!)
+          # settings.each { |s| model_class._my_index[s.name] = s.my_option }
+        end
+
+        # Runtime hook: called before setting value changes
+        ModelSettings::ModuleRegistry.before_setting_change do |instance, setting, new_value|
+          # TODO: Add before-change logic here
+          # Examples:
+          # - Authorization checks
+          # - Pre-change validation
+          # - Conditional logic
+          #
+          # Can raise exceptions to abort the change:
+          # raise UnauthorizedError, "Cannot change #{setting.name}" unless authorized?
+        end
+
+        # Runtime hook: called after setting value changes
+        # ⚠️ Should handle errors gracefully (change already happened)
+        ModelSettings::ModuleRegistry.after_setting_change do |instance, setting, old_value, new_value|
+          # TODO: Add after-change logic here
+          # Examples:
+          # - Audit logging
+          # - Notifications
+          # - Webhooks
+          #
+          # Handle errors gracefully:
+          # begin
+          #   log_change(instance, setting, old_value, new_value)
+          # rescue => e
+          #   Rails.logger.error("Failed to log change: #{e.message}")
+          # end
+        end
+
+        # Add module to active modules list
+        settings_add_module(<%= module_symbol_name %>)
+
+        # Optional: Add class attributes for module state
+        # class_attribute :_<%= module_file_name %>_data, default: {}
+        # class_attribute :_<%= module_file_name %>_index, default: {}
+      end
+
+      # Class methods added to the model
+      module ClassMethods
+        # Example class method
+        #
+        # @return [Array<Setting>] Settings processed by this module
+        #
+        # @example
+        #   User.settings_with_<%= module_file_name %>
+        #   # => [#<Setting name=:example, ...>]
+        #
+        def settings_with_<%= module_file_name %>
+          # TODO: Implement class method logic
+          settings.select { |s| s.options[<%= module_symbol_name %>] }
+        end
+      end
+
+      # Instance methods added to model instances
+
+      # Example instance method
+      #
+      # @param setting_name [Symbol] Setting name
+      # @return [Object] Some computed value
+      #
+      # @example
+      #   user.<%= module_file_name %>_for(:example_setting)
+      #   # => some_value
+      #
+      def <%= module_file_name %>_for(setting_name)
+        setting = self.class.find_setting(setting_name)
+        return nil unless setting
+
+        # TODO: Implement instance method logic
+        setting.options[<%= module_symbol_name %>]
+      end
+
+      private
+
+      # Private helper methods
+
+      # Example helper
+      def validate_<%= module_file_name %>_value(value)
+        # TODO: Add validation logic
+        true
+      end
+    end
+  end
+end
