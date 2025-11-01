@@ -219,7 +219,7 @@ module ModelSettings
         exclusive_groups.each do |group_name, module_names|
           active_in_group = active_modules & module_names
           if active_in_group.size > 1
-            raise ArgumentError, "Cannot use multiple modules from exclusive group '#{group_name}': #{active_in_group.join(", ")}"
+            raise ArgumentError, ErrorMessages.module_conflict_error(group_name, active_in_group)
           end
         end
         true

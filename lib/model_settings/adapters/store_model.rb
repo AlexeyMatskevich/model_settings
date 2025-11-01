@@ -188,7 +188,12 @@ module ModelSettings
       def storage_column
         storage = setting.storage
         return storage[:column] if storage.is_a?(Hash) && storage[:column]
-        raise ArgumentError, "StoreModel adapter requires storage: {column: :column_name}"
+
+        raise ArgumentError, ErrorMessages.adapter_configuration_error(
+          :store_model,
+          setting,
+          @model_class
+        )
       end
     end
   end

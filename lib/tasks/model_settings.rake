@@ -27,59 +27,42 @@ namespace :settings do
       puts "✓ Documentation generation complete!"
     rescue => e
       puts "ERROR: #{e.message}"
-      puts e.backtrace.first(5).join("\n")
+      puts e.backtrace.first(5).join("\n") if ENV["DEBUG"]
+      exit 1
+    end
+
+    desc "List all deprecated settings"
+    task list_deprecated: :environment do
+      require "model_settings"
+
+      lister = ModelSettings::DeprecatedSettingsLister.new
+      lister.print_list
+    rescue => e
+      puts "ERROR: #{e.message}"
+      puts e.backtrace.first(5).join("\n") if ENV["DEBUG"]
       exit 1
     end
   end
 
   namespace :audit do
-    desc "Audit deprecated settings across all models"
+    desc "Audit deprecated settings usage in database"
     task deprecated: :environment do
       require "model_settings"
 
-      puts "Auditing deprecated settings..."
-      puts ""
+      auditor = ModelSettings::DeprecationAuditor.new
+      report = auditor.generate_report
 
-      models = find_models_with_settings
-      deprecated_count = 0
+      puts report
 
-      models.each do |model_class|
-        deprecated_settings = model_class._settings.select(&:deprecated?)
-
-        next if deprecated_settings.empty?
-
-        puts "#{model_class.name}:"
-        deprecated_settings.each do |setting|
-          deprecated_count += 1
-          message = setting.options[:deprecated]
-          message = "(no message)" if message == true
-
-          puts "  - #{setting.name}: #{message}"
-        end
-        puts ""
-      end
-
-      if deprecated_count.zero?
-        puts "✓ No deprecated settings found"
-        exit 0
+      if report.has_active_usage?
+        exit 1  # Fail CI if deprecated settings are in use
       else
-        puts "Found #{deprecated_count} deprecated setting(s) across #{models.size} model(s)"
-        exit 1  # Non-zero exit for CI/CD pipelines
+        exit 0  # Success
       end
     rescue => e
       puts "ERROR: #{e.message}"
+      puts e.backtrace.first(5).join("\n") if ENV["DEBUG"]
       exit 1
-    end
-  end
-
-  # Helper method
-  def find_models_with_settings
-    return [] unless defined?(Rails)
-
-    Rails.application.eager_load! if Rails.env.development?
-
-    ActiveRecord::Base.descendants.select do |model|
-      model.respond_to?(:_settings) && model._settings.any?
     end
   end
 end

@@ -67,7 +67,7 @@ RSpec.describe ModelSettings::Adapters::Json do
       it "raises ArgumentError" do
         expect {
           JsonTestModel.setting :invalid_setting, type: :json, storage: storage_config
-        }.to raise_error(ArgumentError, /JSON adapter requires storage/)
+        }.to raise_error(ArgumentError, /JSON adapter requires a storage column/m)
       end
     end
 
@@ -77,7 +77,7 @@ RSpec.describe ModelSettings::Adapters::Json do
       it "raises ArgumentError" do
         expect {
           JsonTestModel.setting :invalid_setting, type: :json, storage: storage_config
-        }.to raise_error(ArgumentError, /JSON adapter requires storage/)
+        }.to raise_error(ArgumentError, /JSON adapter requires a storage column/m)
       end
     end
   end

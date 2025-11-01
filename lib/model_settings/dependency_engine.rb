@@ -57,10 +57,8 @@ module ModelSettings
       cycles = detect_cycles(graph)
 
       if cycles.any?
-        cycle_names = cycles.map(&:name).join(" -> ")
-        raise CyclicSyncError,
-          "Cyclic sync detected: #{cycle_names}\n" \
-          "Settings cannot have circular sync dependencies."
+        cycle_names = cycles.map(&:name)
+        raise CyclicSyncError, ErrorMessages.cyclic_sync_error(cycle_names)
       end
 
       # Pre-compute execution order using topological sort
@@ -80,7 +78,7 @@ module ModelSettings
 
       while current_wave.any?
         # Safety check (cycles should be caught at definition time)
-        raise "Infinite cascade detected" if iteration >= MAX_ITERATIONS
+        raise ErrorMessages.infinite_cascade_error(iteration, MAX_ITERATIONS) if iteration >= MAX_ITERATIONS
 
         # Apply cascades (returns new changes)
         cascaded = apply_cascades_batch(instance, current_wave)

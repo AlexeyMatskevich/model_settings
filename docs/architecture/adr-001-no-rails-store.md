@@ -9,7 +9,7 @@
 
 ## Контекст
 
-Спецификация ModelSettings (`llm_docs/settings_gem_spec.md`, Section 2) изначально требовала использование Rails `ActiveRecord::Store` в качестве foundation для JSON adapter:
+Спецификация ModelSettings изначально требовала использование Rails `ActiveRecord::Store` в качестве foundation для JSON adapter:
 
 ```ruby
 # Требование спецификации:

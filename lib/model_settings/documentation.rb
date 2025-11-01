@@ -70,6 +70,7 @@ module ModelSettings
         when :markdown then "md"
         when :json then "json"
         when :yaml then "yml"
+        when :html then "html"
         else format.to_s
         end
       end

@@ -47,8 +47,9 @@ See how to solve specific problems with ModelSettings:
 
 Learn how to use ModelSettings effectively:
 
+- **[Deprecation Management](guides/deprecation.md)** - Marking settings as deprecated, auditing usage, and migration strategies
+- **[Performance Guide](guides/performance.md)** - Benchmarks, optimization strategies, and monitoring
 - **[Testing Guide](guides/testing.md)** - Testing strategies and patterns
-- **[Performance Guide](guides/performance.md)** - Optimization and N+1 prevention
 - **[Best Practices](guides/best_practices.md)** - Design patterns and recommendations
 
 ## 🔍 Finding What You Need
@@ -94,6 +95,12 @@ Learn how to use ModelSettings effectively:
 **Test my settings**
 → See [Testing Guide](guides/testing.md)
 
+**Manage deprecated settings**
+→ See [Deprecation Management](guides/deprecation.md)
+
+**Optimize performance**
+→ See [Performance Guide](guides/performance.md)
+
 ### By Feature
 
 | Feature | Documentation | Quick Example |
@@ -107,6 +114,7 @@ Learn how to use ModelSettings effectively:
 | I18n | [I18n Module](modules/i18n.md) | `t_label_for(:setting_name)` |
 | Inheritance | [Settings Inheritance](core/inheritance.md) | Automatic in `class Child < Parent` |
 | Documentation | [Doc Generator](modules/documentation.md) | `rake settings:docs:generate` |
+| Deprecation | [Deprecation Management](guides/deprecation.md) | `deprecated: "Use new_setting"` |
 
 ## 📖 Additional Resources
 

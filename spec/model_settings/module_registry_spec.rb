@@ -358,7 +358,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       it "raises ArgumentError" do
         expect {
           described_class.validate_exclusive_groups!(active_modules)
-        }.to raise_error(ArgumentError, /Cannot use multiple modules from exclusive group/)
+        }.to raise_error(ArgumentError, /Cannot use multiple modules from the .* exclusive group/m)
       end
     end
   end

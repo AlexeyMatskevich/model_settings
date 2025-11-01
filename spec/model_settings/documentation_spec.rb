@@ -903,7 +903,144 @@ RSpec.describe ModelSettings::Documentation do
       end
     end
 
-    # Characteristic 1: Format = unsupported
+    # Characteristic 1: Format = yaml
+    context "when format is :yaml" do
+      subject(:parsed) { YAML.safe_load(model_class.settings_documentation(format: :yaml)) }
+
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "YamlTestModel"
+          end
+
+          include ModelSettings::DSL
+
+          setting :enabled,
+            type: :column,
+            description: "Enable feature",
+            default: false
+
+          setting :api_key,
+            type: :column,
+            description: "API key"
+        end
+      end
+
+      let(:enabled_setting) { parsed["settings"].find { |s| s["name"] == "enabled" } }
+
+      it "includes model name" do
+        expect(parsed["model"]).to eq("YamlTestModel")
+      end
+
+      it "includes generated timestamp" do
+        expect(parsed["generated_at"]).to match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+      end
+
+      it "includes settings count" do
+        expect(parsed["settings_count"]).to eq(2)
+      end
+
+      it "includes settings array" do
+        expect(parsed["settings"]).to be_an(Array)
+        expect(parsed["settings"].size).to eq(2)
+      end
+
+      it "includes setting name" do
+        expect(enabled_setting["name"]).to eq("enabled")
+      end
+
+      it "includes setting description" do
+        expect(enabled_setting["description"]).to eq("Enable feature")
+      end
+
+      it "includes setting type" do
+        expect(enabled_setting["type"]).to eq("column")
+      end
+
+      it "includes default value" do
+        expect(enabled_setting["default"]).to eq(false)
+      end
+    end
+
+    # Characteristic 2: Format = html
+    context "when format is :html" do
+      subject(:html) { model_class.settings_documentation(format: :html) }
+
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "HtmlTestModel"
+          end
+
+          include ModelSettings::DSL
+
+          setting :enabled,
+            type: :column,
+            description: "Enable feature",
+            default: false
+        end
+      end
+
+      it "generates valid HTML" do
+        expect(html).to include("<!DOCTYPE html>")
+        expect(html).to include("<html")
+        expect(html).to include("</html>")
+      end
+
+      it "includes model name in title" do
+        expect(html).to include("<title>HtmlTestModel Settings Documentation</title>")
+      end
+
+      it "includes model name in heading" do
+        expect(html).to include("<h1>HtmlTestModel Settings Documentation</h1>")
+      end
+
+      it "includes setting name" do
+        expect(html).to include("<code>enabled</code>")
+      end
+
+      it "includes setting description" do
+        expect(html).to include("Enable feature")
+      end
+
+      it "includes type badge" do
+        expect(html).to include("badge-type")
+        expect(html).to include("column")
+      end
+
+      it "includes properties table" do
+        expect(html).to include("<table>")
+        expect(html).to include("<th>Property</th>")
+        expect(html).to include("<th>Value</th>")
+      end
+
+      it "includes API methods" do
+        expect(html).to include("API Methods:")
+        expect(html).to include("html_test_model.enabled")
+        expect(html).to include("html_test_model.enabled_enable!")
+      end
+
+      context "with HTML characters in description" do
+        let(:model_class) do
+          Class.new(TestModel) do
+            def self.name
+              "TestModel"
+            end
+
+            include ModelSettings::DSL
+
+            setting :test, type: :column, description: "<script>alert('xss')</script>"
+          end
+        end
+
+        it "escapes HTML in content" do
+          expect(html).to include("&lt;script&gt;")
+          expect(html).not_to include("<script>alert")
+        end
+      end
+    end
+
+    # Characteristic 3: Format = unsupported
     context "when format is unsupported" do
       let(:model_class) do
         Class.new(TestModel) do
@@ -920,7 +1057,7 @@ RSpec.describe ModelSettings::Documentation do
       it "raises ArgumentError with descriptive message" do
         expect {
           model_class.settings_documentation(format: :xml)
-        }.to raise_error(ArgumentError, /Unsupported format/)
+        }.to raise_error(ArgumentError, /Unsupported documentation format/m)
       end
     end
   end

@@ -18,6 +18,14 @@ File.write('docs/user_settings.md', docs)
 # Generate JSON
 docs = User.settings_documentation(format: :json)
 File.write('docs/user_settings.json', docs)
+
+# Generate YAML
+docs = User.settings_documentation(format: :yaml)
+File.write('docs/user_settings.yml', docs)
+
+# Generate HTML
+docs = User.settings_documentation(format: :html)
+File.write('docs/user_settings.html', docs)
 ```
 
 ## Rake Tasks
@@ -28,6 +36,12 @@ rake settings:docs:generate
 
 # Generate JSON
 rake settings:docs:generate FORMAT=json
+
+# Generate YAML
+rake settings:docs:generate FORMAT=yaml
+
+# Generate HTML
+rake settings:docs:generate FORMAT=html
 
 # Output directory
 rake settings:docs:generate OUTPUT_DIR=docs/api

@@ -157,7 +157,12 @@ module ModelSettings
       def storage_column
         storage = setting.storage
         return storage[:column] if storage.is_a?(Hash) && storage[:column]
-        raise ArgumentError, "JSON adapter requires storage: {column: :column_name}"
+
+        raise ArgumentError, ErrorMessages.adapter_configuration_error(
+          :json,
+          setting,
+          @model_class
+        )
       end
 
       # Check if this setting uses array membership pattern

@@ -86,7 +86,7 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       it "includes cycle information in error message" do
         expect { engine.validate_sync_graph! }
-          .to raise_error(ModelSettings::CyclicSyncError, /Cyclic sync detected/)
+          .to raise_error(ModelSettings::CyclicSyncError, /Cycle detected in sync dependencies/m)
       end
     end
 
@@ -103,7 +103,7 @@ RSpec.describe ModelSettings::DependencyEngine do
 
       it "includes cycle information in error message" do
         expect { engine.validate_sync_graph! }
-          .to raise_error(ModelSettings::CyclicSyncError, /Cyclic sync detected/)
+          .to raise_error(ModelSettings::CyclicSyncError, /Cycle detected in sync dependencies/m)
       end
     end
 

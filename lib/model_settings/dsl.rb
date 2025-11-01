@@ -251,7 +251,11 @@ module ModelSettings
         when :store_model
           Adapters::StoreModel
         else
-          raise ArgumentError, "Unknown storage type: #{setting.type}"
+          raise ArgumentError, ErrorMessages.unknown_storage_type_error(
+            setting.type,
+            setting,
+            self
+          )
         end
 
         adapter_class.new(self, setting)
@@ -375,6 +379,105 @@ module ModelSettings
         module_names.flatten.each { |mod| settings_add_module(mod) }
       end
 
+      # Debug helper: Print comprehensive settings information
+      #
+      # @return [void]
+      #
+      # @example
+      #   User.settings_debug
+      #
+      def settings_debug
+        puts "=" * 80
+        puts "Settings Debug: #{name}"
+        puts "=" * 80
+        puts
+
+        # Basic info
+        puts "Total Settings: #{_settings.count}"
+        puts "Root Settings: #{root_settings.count}"
+        puts "Leaf Settings: #{leaf_settings.count}"
+        puts "All Settings (including nested): #{all_settings_recursive.count}"
+        puts
+
+        # Active modules
+        puts "Active Modules:"
+        if _active_modules.any?
+          _active_modules.each { |mod| puts "  - #{mod}" }
+        else
+          puts "  (none)"
+        end
+        puts
+
+        # Storage columns
+        if defined?(self::SETTINGS_COLUMNS)
+          puts "Storage Columns:"
+          self::SETTINGS_COLUMNS.each { |col| puts "  - #{col}" }
+          puts
+        end
+
+        # Settings breakdown by type
+        puts "Settings by Type:"
+        all_settings_recursive.group_by(&:type).each do |type, settings|
+          puts "  - #{type}: #{settings.count}"
+        end
+        puts
+
+        # Deprecated settings
+        deprecated = all_settings_recursive.select(&:deprecated?)
+        puts "Deprecated Settings: #{deprecated.count}"
+        if deprecated.any?
+          deprecated.each do |setting|
+            puts "  - #{setting.name}"
+            message = setting.options[:deprecated]
+            puts "    Message: #{message}" if message.is_a?(String)
+          end
+        end
+        puts
+
+        # Cascades
+        cascaded = all_settings_recursive.select { |s| s.options[:cascade] }
+        puts "Settings with Cascades: #{cascaded.count}"
+        if cascaded.any?
+          cascaded.each do |setting|
+            config = setting.options[:cascade]
+            modes = []
+            modes << "enable" if config[:enable]
+            modes << "disable" if config[:disable]
+            puts "  - #{setting.name}: #{modes.join(", ")}"
+          end
+        end
+        puts
+
+        # Syncs
+        synced = all_settings_recursive.select { |s| s.options[:sync] }
+        puts "Settings with Syncs: #{synced.count}"
+        if synced.any?
+          synced.each do |setting|
+            config = setting.options[:sync]
+            target = config[:target] || config["target"]
+            mode = config[:mode] || config["mode"] || :forward
+            puts "  - #{setting.name} → #{target} (#{mode})"
+          end
+        end
+        puts
+
+        # Dependency graph
+        if _dependency_engine
+          puts "Sync Execution Order:"
+          if _dependency_engine.sync_execution_order.any?
+            _dependency_engine.sync_execution_order.each_with_index do |setting, i|
+              puts "  #{i + 1}. #{setting.name}"
+            end
+          else
+            puts "  (none)"
+          end
+        end
+        puts
+
+        puts "=" * 80
+        nil
+      end
+
       # Generate documentation for this model's settings
       #
       # @param format [Symbol] Output format (:markdown, :json, :yaml)
@@ -388,9 +491,17 @@ module ModelSettings
       # @example Generate JSON documentation
       #   docs = User.settings_documentation(format: :json)
       #
+      # @example Generate YAML documentation
+      #   docs = User.settings_documentation(format: :yaml)
+      #
+      # @example Generate HTML documentation
+      #   docs = User.settings_documentation(format: :html)
+      #
       def settings_documentation(format: :markdown, filter: nil)
         require_relative "documentation/markdown_formatter"
         require_relative "documentation/json_formatter"
+        require_relative "documentation/yaml_formatter"
+        require_relative "documentation/html_formatter"
 
         # Get all root settings
         settings_to_document = _settings.dup
@@ -406,8 +517,15 @@ module ModelSettings
           Documentation::MarkdownFormatter
         when :json
           Documentation::JsonFormatter
+        when :yaml
+          Documentation::YamlFormatter
+        when :html
+          Documentation::HtmlFormatter
         else
-          raise ArgumentError, "Unsupported format: #{format}. Use :markdown or :json"
+          raise ArgumentError, ErrorMessages.unsupported_format_error(
+            format,
+            [:markdown, :json, :yaml, :html]
+          )
         end
 
         formatter = formatter_class.new(self, settings_to_document)

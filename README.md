@@ -15,6 +15,8 @@ Declarative configuration management DSL for Rails models with support for multi
 | Authorization | [Roles](docs/modules/roles.md), [Pundit](docs/modules/pundit.md), [ActionPolicy](docs/modules/action_policy.md) |
 | Settings Inheritance | [Inheritance Guide](docs/core/inheritance.md) |
 | Validation & Callbacks | [Validation](docs/core/validation.md), [Callbacks](docs/core/callbacks.md) |
+| Deprecation Management | [Deprecation Guide](docs/guides/deprecation.md) - Audit & migrate deprecated settings |
+| Performance | [Performance Guide](docs/guides/performance.md) - Benchmarks & optimization |
 | **Module Development** | [Module Development Guide](docs/guides/module_development.md) - Create custom modules |
 | Real-World Examples | [Usage Cases](docs/usage_cases/) |
 
@@ -28,6 +30,7 @@ Declarative configuration management DSL for Rails models with support for multi
 - **Callback System** - before_enable, after_change, after_commit hooks
 - **Dirty Tracking** - Full change tracking across all storage types
 - **Documentation Generator** - Auto-generate Markdown/JSON documentation
+- **Deprecation Management** - Mark settings as deprecated and audit real usage
 - **Query Interface** - Find and filter settings by metadata
 - **I18n Support** - Full internationalization
 - **Module Development API** - Create custom modules with Rails generator
@@ -121,19 +124,23 @@ setting :admin_panel, authorize_with: :admin_access?
 
 **[→ See authorization guides](docs/modules/)**
 
-## Documentation Generation
+## Documentation & Deprecation Management
 
-Auto-generate documentation for your settings:
+Auto-generate documentation and manage deprecated settings:
 
 ```bash
 # Generate Markdown documentation
 rake settings:docs:generate
 
-# Audit deprecated settings
+# List all deprecated settings
+rake settings:docs:list_deprecated
+
+# Audit deprecated settings usage in database
 rake settings:audit:deprecated
 ```
 
 **[→ See Documentation Module guide](docs/modules/documentation.md)**
+**[→ See Deprecation Management guide](docs/guides/deprecation.md)**
 
 ## Module Development
 

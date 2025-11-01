@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **YAML and HTML Documentation Formats**: Extended documentation generator with new output formats
+  - `YamlFormatter`: Generate YAML documentation for configuration management and IaC
+  - `HtmlFormatter`: Generate styled HTML documentation for wikis and documentation sites
+  - Both formatters support all existing documentation features (authorization, deprecation, cascades, syncs, callbacks)
+  - HTML formatter includes XSS protection with proper HTML escaping
+  - Updated rake tasks to support FORMAT=yaml and FORMAT=html
+  - 10 new comprehensive tests (110 total documentation examples)
+
 ## [0.7.0] - 2025-11-01
 
 ### Added

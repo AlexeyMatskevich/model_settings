@@ -45,6 +45,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop-factory_bot"
   spec.add_development_dependency "rubocop-rspec-guide", "~> 0.4.0"
   spec.add_development_dependency "store_model", "~> 2.0"
+  spec.add_development_dependency "benchmark-ips", "~> 2.0"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

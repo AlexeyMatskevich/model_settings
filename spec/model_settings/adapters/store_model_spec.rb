@@ -63,7 +63,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       it "raises ArgumentError" do
         expect {
           StoreModelTestModel.setting :invalid_setting, type: :store_model, storage: storage_config
-        }.to raise_error(ArgumentError, /StoreModel adapter requires storage/)
+        }.to raise_error(ArgumentError, /StoreModel adapter requires a storage column/m)
       end
     end
 
@@ -73,7 +73,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
       it "raises ArgumentError" do
         expect {
           StoreModelTestModel.setting :invalid_setting, type: :store_model, storage: storage_config
-        }.to raise_error(ArgumentError, /StoreModel adapter requires storage/)
+        }.to raise_error(ArgumentError, /StoreModel adapter requires a storage column/m)
       end
     end
   end
