@@ -38,7 +38,36 @@ module ModelSettings
       # Track if settings have been compiled
       class_attribute :_settings_compiled, default: false
 
-      # Track active modules for this model
+      # Track active modules for this model using symbols
+      #
+      # This uses symbol-based tracking instead of Module object references
+      # to avoid issues with module reloading in RSpec and development mode.
+      #
+      # **Why symbols instead of Module objects?**
+      # - In RSpec with eager loading, modules get reloaded between test runs
+      # - Each reload creates a new Module object with different object identity
+      # - Checking `included_modules.include?(Module)` fails after reload
+      # - Symbols are stable across reloads (they're always the same object)
+      #
+      # **Example:**
+      # ```ruby
+      # class User < ApplicationRecord
+      #   include ModelSettings::DSL
+      #   include ModelSettings::Modules::Pundit
+      # end
+      #
+      # User._active_modules
+      # # => [:pundit]  (symbol, not Module object)
+      #
+      # # After module reload in RSpec:
+      # ModelSettings::ModuleRegistry.module_included?(:pundit, User)
+      # # => true  (symbol comparison still works)
+      # ```
+      #
+      # Modules register themselves via `settings_add_module(:module_name)`.
+      #
+      # @see ModelSettings::ModuleRegistry.module_included? for the check method
+      # @see #settings_add_module for how modules register themselves
       class_attribute :_active_modules, default: []
 
       # Centralized storage for all module metadata
@@ -391,12 +420,93 @@ module ModelSettings
 
       # Add a module to the model's active modules list
       #
+      # Modules call this method in their `included` block to register themselves
+      # with the model. This enables symbol-based tracking that survives module
+      # reloading in RSpec and development mode.
+      #
+      # **How it works:**
+      # 1. Module is included: `include ModelSettings::Modules::Pundit`
+      # 2. Module's `included` block runs
+      # 3. Module calls: `settings_add_module(:pundit)`
+      # 4. Symbol `:pundit` is added to `_active_modules` array
+      # 5. Later, `ModuleRegistry.module_included?(:pundit, User)` checks this array
+      #
+      # **Example module registration:**
+      # ```ruby
+      # module ModelSettings::Modules::Pundit
+      #   extend ActiveSupport::Concern
+      #
+      #   included do
+      #     # Register this module by symbol
+      #     settings_add_module(:pundit) if respond_to?(:settings_add_module)
+      #   end
+      # end
+      # ```
+      #
       # @param module_name [Symbol] Name of the module to activate
       # @return [void]
+      # @see ModelSettings::ModuleRegistry.module_included? for checking if module is active
+      # @see _active_modules for the symbol-based tracking array
       def settings_add_module(module_name)
         return if _active_modules.include?(module_name)
 
         self._active_modules = _active_modules + [module_name]
+      end
+
+      # Check for exclusive module conflicts
+      #
+      # Convenience wrapper around ModuleRegistry.check_exclusive_conflict!
+      # Used in module `included` blocks to ensure no conflicting modules
+      # are included together (e.g., only one authorization module at a time).
+      #
+      # @param module_name [Symbol] Name of the module being checked
+      # @return [void]
+      # @raise [ModelSettings::ModuleRegistry::ExclusiveGroupConflictError] if conflict detected
+      #
+      # @example In module
+      #   included do
+      #     settings_add_module(:pundit)
+      #     settings_check_exclusive_conflict!(:pundit)
+      #   end
+      #
+      def settings_check_exclusive_conflict!(module_name)
+        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, module_name)
+      end
+
+      # Get module-specific metadata for settings
+      #
+      # Convenience wrapper around ModuleRegistry.get_module_metadata
+      #
+      # @param module_name [Symbol] Name of the module
+      # @param setting_name [Symbol, nil] Name of the setting (nil for all settings)
+      # @return [Object, Hash, nil] Metadata value or hash of all settings
+      #
+      # @example Get metadata for specific setting
+      #   User.get_module_metadata(:roles, :billing_override)
+      #   # => { viewable_by: [:admin, :finance], editable_by: [:admin] }
+      #
+      # @example Get all metadata for a module
+      #   User.get_module_metadata(:roles)
+      #   # => { billing_override: {...}, api_access: {...} }
+      #
+      def get_module_metadata(module_name, setting_name = nil)
+        ModelSettings::ModuleRegistry.get_module_metadata(self, module_name, setting_name)
+      end
+
+      # Check if module has metadata for a setting
+      #
+      # Convenience wrapper around ModuleRegistry.module_metadata?
+      #
+      # @param module_name [Symbol] Name of the module
+      # @param setting_name [Symbol] Name of the setting
+      # @return [Boolean]
+      #
+      # @example
+      #   User.module_metadata?(:roles, :billing_override)
+      #   # => true
+      #
+      def module_metadata?(module_name, setting_name)
+        ModelSettings::ModuleRegistry.module_metadata?(self, module_name, setting_name)
       end
 
       # Configure model-specific settings

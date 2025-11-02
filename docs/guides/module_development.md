@@ -7,12 +7,13 @@ This document defines the contract for creating external modules that extend Mod
 1. [Overview](#overview)
 2. [Quick Start with Generator](#quick-start-with-generator)
 3. [Module Structure](#module-structure)
-4. [ModuleRegistry API](#moduleregistry-api)
-4. [Lifecycle Hooks](#lifecycle-hooks)
-5. [Hook Execution Order](#hook-execution-order)
-6. [Best Practices](#best-practices)
-7. [Complete Example](#complete-example)
-8. [Testing Modules](#testing-modules)
+4. [DSL Helpers](#dsl-helpers)
+5. [ModuleRegistry API](#moduleregistry-api)
+6. [Lifecycle Hooks](#lifecycle-hooks)
+7. [Hook Execution Order](#hook-execution-order)
+8. [Best Practices](#best-practices)
+9. [Complete Example](#complete-example)
+10. [Testing Modules](#testing-modules)
 
 ---
 
@@ -142,14 +143,14 @@ module ModelSettings
         settings_add_module(:my_module) if respond_to?(:settings_add_module)
 
         # 6. Check for conflicts with other modules
-        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :my_module)
+        settings_check_exclusive_conflict!(:my_module) if respond_to?(:settings_check_exclusive_conflict!)
       end
 
       # Class methods added to model
       module ClassMethods
         def my_class_method
-          # Retrieve metadata using centralized API
-          metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :my_module)
+          # Retrieve metadata using DSL helper (recommended)
+          metadata = get_module_metadata(:my_module)
           # ...
         end
       end
@@ -167,6 +168,113 @@ end
 - All modules must be under `ModelSettings::Modules::*`
 - Module name should be PascalCase (e.g., `ActionPolicy`)
 - Symbol name should be snake_case (e.g., `:action_policy`)
+
+---
+
+## DSL Helpers
+
+ModelSettings provides convenient DSL helpers that simplify module development. These helpers are available **only when `self` is a model class** (inside `ClassMethods` or `included do` blocks).
+
+### Available Helpers
+
+#### `get_module_metadata(module_name, setting_name = nil)`
+
+Convenience wrapper around `ModuleRegistry.get_module_metadata`. Retrieves module-specific metadata.
+
+```ruby
+module ClassMethods
+  def settings_with_audit
+    # Short form (recommended in ClassMethods)
+    all_metadata = get_module_metadata(:audit_trail)
+    all_metadata.keys
+  end
+
+  def audit_level_for(setting_name)
+    # Get metadata for specific setting
+    get_module_metadata(:audit_trail, setting_name)
+  end
+end
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Name of the module
+- `setting_name` (Symbol, optional) - Setting name (nil for all settings)
+
+**Returns:**
+- If `setting_name` provided: Metadata value or `nil`
+- If `setting_name` omitted: Hash of `setting_name => metadata`
+
+---
+
+#### `module_metadata?(module_name, setting_name)`
+
+Check if module has metadata for a setting.
+
+```ruby
+module ClassMethods
+  def has_audit?(setting_name)
+    module_metadata?(:audit_trail, setting_name)
+  end
+end
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Name of the module
+- `setting_name` (Symbol) - Setting name
+
+**Returns:** Boolean
+
+---
+
+#### `settings_check_exclusive_conflict!(module_name)`
+
+Check for conflicts with other modules in the same exclusive group.
+
+```ruby
+included do
+  # Add to active modules
+  settings_add_module(:my_module) if respond_to?(:settings_add_module)
+
+  # Check for conflicts (short form, recommended)
+  settings_check_exclusive_conflict!(:my_module) if respond_to?(:settings_check_exclusive_conflict!)
+end
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Module being checked
+
+**Raises:** `ExclusiveGroupConflictError` if conflict detected
+
+---
+
+### When to Use Helpers vs. Direct ModuleRegistry Calls
+
+✅ **Use DSL helpers** when:
+- Inside `ClassMethods` (where `self` = model class)
+- Inside `included do` blocks (where `self` = model class)
+- Code is cleaner and easier to read
+
+❌ **Use direct ModuleRegistry calls** when:
+- At module level (outside `included do` or `ClassMethods`)
+- Inside lifecycle hooks (`on_setting_defined`, `on_settings_compiled`)
+- Working with a `model_class` parameter (not `self`)
+
+**Example - When helpers are NOT available:**
+
+```ruby
+# Module-level registration - NO helpers available here
+ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+  # Inside hook - must use direct calls with model_class parameter
+  next unless ModelSettings::ModuleRegistry.module_included?(:my_module, model_class)
+
+  ModelSettings::ModuleRegistry.set_module_metadata(
+    model_class,  # Parameter, not self
+    :my_module,
+    setting.name,
+    setting.options[:my_option]
+  )
+end
+```
 
 ---
 
@@ -216,7 +324,11 @@ Check for conflicts when including a module.
 
 ```ruby
 included do
+  # Direct API (works, but verbose)
   ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :my_module)
+
+  # DSL helper (recommended in included do blocks - cleaner)
+  settings_check_exclusive_conflict!(:my_module) if respond_to?(:settings_check_exclusive_conflict!)
 end
 ```
 
@@ -225,6 +337,8 @@ end
 - `module_name` (Symbol) - Module being included
 
 **Raises:** `ExclusiveGroupConflictError` if a conflicting module is already included
+
+**Note:** In `included do` blocks, prefer using the DSL helper `settings_check_exclusive_conflict!(:module_name)` over the direct ModuleRegistry call. The `respond_to?` check ensures compatibility when the module is included before DSL. See [DSL Helpers](#dsl-helpers) section.
 
 **Example Error:**
 ```
@@ -429,11 +543,18 @@ all_roles = ModelSettings::ModuleRegistry.get_module_metadata(User, :roles)
 module ClassMethods
   # Get all settings with specific option value
   def settings_with_my_option(value)
+    # Direct API (works, but verbose)
     all_metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :my_module)
+
+    # DSL helper (recommended in ClassMethods - cleaner)
+    all_metadata = get_module_metadata(:my_module)
+
     all_metadata.select { |name, data| data == value }.keys
   end
 end
 ```
+
+**Note:** In `ClassMethods`, prefer using the DSL helper `get_module_metadata(:module_name)` over the direct ModuleRegistry call. See [DSL Helpers](#dsl-helpers) section.
 
 ---
 
@@ -1158,7 +1279,8 @@ module ModelSettings
         #
         # @return [Array<Setting>] Settings with audit_log != :none
         def audited_settings
-          all_audit_metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :audit_trail)
+          # Use DSL helper (recommended in ClassMethods)
+          all_audit_metadata = get_module_metadata(:audit_trail)
           setting_names = all_audit_metadata.select { |_name, level| level && level != :none }.keys
           setting_names.map { |name| find_setting(name) }.compact
         end
@@ -1168,11 +1290,8 @@ module ModelSettings
         # @param setting_name [Symbol] Setting name
         # @return [Boolean]
         def setting_audited?(setting_name)
-          audit_level = ModelSettings::ModuleRegistry.get_module_metadata(
-            self,
-            :audit_trail,
-            setting_name.to_sym
-          )
+          # Use DSL helper (recommended in ClassMethods)
+          audit_level = get_module_metadata(:audit_trail, setting_name.to_sym)
           audit_level.present? && audit_level != :none
         end
       end

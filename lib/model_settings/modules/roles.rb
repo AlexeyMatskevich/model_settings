@@ -40,6 +40,32 @@ module ModelSettings
       # Register as part of exclusive authorization group
       ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :roles)
 
+      # Register query methods for introspection
+      ModelSettings::ModuleRegistry.register_query_method(
+        :roles, :settings_viewable_by, :class,
+        description: "Get all settings viewable by a specific role",
+        parameters: {role: :Symbol},
+        returns: "Array<Symbol>"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :roles, :settings_editable_by, :class,
+        description: "Get all settings editable by a specific role",
+        parameters: {role: :Symbol},
+        returns: "Array<Symbol>"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :roles, :can_view_setting?, :instance,
+        description: "Check if a setting is viewable by a specific role",
+        parameters: {setting_name: :Symbol, role: :Symbol},
+        returns: "Boolean"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :roles, :can_edit_setting?, :instance,
+        description: "Check if a setting is editable by a specific role",
+        parameters: {setting_name: :Symbol, role: :Symbol},
+        returns: "Boolean"
+      )
+
       # Register viewable_by option
       ModelSettings::ModuleRegistry.register_option(:viewable_by) do |setting, value|
         unless value == :all || value.is_a?(Array) || value.is_a?(Symbol)
@@ -91,7 +117,7 @@ module ModelSettings
         settings_add_module(:roles) if respond_to?(:settings_add_module)
 
         # Check for conflicts with other authorization modules
-        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :roles)
+        settings_check_exclusive_conflict!(:roles) if respond_to?(:settings_check_exclusive_conflict!)
       end
 
       module ClassMethods
@@ -105,7 +131,7 @@ module ModelSettings
         #   # => [:billing_override, :display_name]
         #
         def settings_viewable_by(role)
-          all_roles = ModelSettings::ModuleRegistry.get_module_metadata(self, :roles)
+          all_roles = get_module_metadata(:roles)
 
           all_roles.select do |_name, roles|
             roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
@@ -122,7 +148,7 @@ module ModelSettings
         #   # => [:billing_override]
         #
         def settings_editable_by(role)
-          all_roles = ModelSettings::ModuleRegistry.get_module_metadata(self, :roles)
+          all_roles = get_module_metadata(:roles)
 
           all_roles.select do |_name, roles|
             roles[:editable_by].include?(role.to_sym)
@@ -143,11 +169,7 @@ module ModelSettings
       #   # => true
       #
       def can_view_setting?(setting_name, role)
-        roles = ModelSettings::ModuleRegistry.get_module_metadata(
-          self.class,
-          :roles,
-          setting_name
-        )
+        roles = self.class.get_module_metadata(:roles, setting_name)
         return true unless roles # No restriction = viewable
 
         roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
@@ -164,11 +186,7 @@ module ModelSettings
       #   # => true
       #
       def can_edit_setting?(setting_name, role)
-        roles = ModelSettings::ModuleRegistry.get_module_metadata(
-          self.class,
-          :roles,
-          setting_name
-        )
+        roles = self.class.get_module_metadata(:roles, setting_name)
         return true unless roles # No restriction = editable
 
         roles[:editable_by].include?(role.to_sym)

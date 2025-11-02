@@ -68,6 +68,25 @@ module ModelSettings
       # Register as part of exclusive authorization group
       ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :action_policy)
 
+      # Register query methods for introspection
+      ModelSettings::ModuleRegistry.register_query_method(
+        :action_policy, :authorization_for_setting, :class,
+        description: "Get the authorization method for a specific setting",
+        parameters: {name: :Symbol},
+        returns: "Symbol, nil"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :action_policy, :settings_requiring, :class,
+        description: "Get all settings that require a specific permission",
+        parameters: {permission: :Symbol},
+        returns: "Array<Symbol>"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :action_policy, :authorized_settings, :class,
+        description: "Get all settings that have authorization",
+        returns: "Array<Symbol>"
+      )
+
       # Register authorize_with option
       ModelSettings::ModuleRegistry.register_option(:authorize_with) do |setting, value|
         unless value.is_a?(Symbol)
@@ -98,7 +117,7 @@ module ModelSettings
         settings_add_module(:action_policy) if respond_to?(:settings_add_module)
 
         # Check for conflicts with other authorization modules
-        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :action_policy)
+        settings_check_exclusive_conflict!(:action_policy) if respond_to?(:settings_check_exclusive_conflict!)
       end
 
       module ClassMethods
@@ -112,7 +131,7 @@ module ModelSettings
         #   # => :manage_billing?
         #
         def authorization_for_setting(name)
-          ModelSettings::ModuleRegistry.get_module_metadata(self, :action_policy, name)
+          get_module_metadata(:action_policy, name)
         end
 
         # Get all settings that require a specific permission
@@ -125,7 +144,7 @@ module ModelSettings
         #   # => [:api_access, :system_config]
         #
         def settings_requiring(permission)
-          all_auth = ModelSettings::ModuleRegistry.get_module_metadata(self, :action_policy)
+          all_auth = get_module_metadata(:action_policy)
 
           all_auth.select { |_name, method| method == permission }.keys
         end
@@ -135,7 +154,7 @@ module ModelSettings
         # @return [Array<Symbol>] Array of setting names
         #
         def authorized_settings
-          ModelSettings::ModuleRegistry.get_module_metadata(self, :action_policy).keys
+          get_module_metadata(:action_policy).keys
         end
       end
     end

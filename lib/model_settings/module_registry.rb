@@ -68,6 +68,36 @@ module ModelSettings
 
       # Check if a module is included
       #
+      # This method solves the module reloading problem that occurs in RSpec and development mode.
+      #
+      # **Problem:** When using `included_modules.include?(ModuleConstant)`:
+      # - In RSpec with eager loading, modules get reloaded between test runs
+      # - Each reload creates a new Module object with different object identity
+      # - Object identity comparison (`included_modules.include?(Module)`) fails because
+      #   the Module constant now points to a different object than when it was included
+      #
+      # **Solution:** Symbol-based tracking instead of object identity:
+      # - When a module is included, it registers itself in `_active_modules` array with a symbol
+      # - `_active_modules` stores symbols like `:roles`, `:pundit`, `:action_policy`
+      # - Symbols are stable across module reloads (they're always the same object)
+      # - Symbol comparison (`_active_modules.include?(:pundit)`) works reliably
+      #
+      # **Example of the problem this solves:**
+      # ```ruby
+      # # Test 1: Include Pundit module
+      # class User
+      #   include ModelSettings::Modules::Pundit  # Module object: #<Module:0x1234>
+      # end
+      # User.included_modules.include?(ModelSettings::Modules::Pundit)  # true
+      #
+      # # Between tests, RSpec reloads ModelSettings::Modules::Pundit
+      # # Now ModelSettings::Modules::Pundit is a NEW Module object: #<Module:0x5678>
+      #
+      # # Test 2: Check if Pundit is included
+      # User.included_modules.include?(ModelSettings::Modules::Pundit)  # FALSE! (wrong object)
+      # User._active_modules.include?(:pundit)  # TRUE! (symbol is stable)
+      # ```
+      #
       # @param module_name [Symbol] Name of the module to check
       # @param model_class [Class] The model class to check
       # @return [Boolean] true if module is included
@@ -75,9 +105,7 @@ module ModelSettings
         return false unless modules.key?(module_name)
         return false unless model_class.respond_to?(:_active_modules)
 
-        # Use _active_modules registry instead of included_modules
-        # This avoids issues with module reloading where object identity changes
-        # _active_modules stores symbols, which are stable across reloads
+        # Use symbol-based tracking to avoid module reloading issues
         model_class._active_modules.include?(module_name)
       end
 
@@ -436,6 +464,59 @@ module ModelSettings
         model_class._module_metadata.dig(module_name, setting_name).present?
       end
 
+      # Register a query method that a module provides
+      #
+      # This allows modules to declare which query methods they add to model classes,
+      # enabling introspection similar to ActiveRecord's columns/associations API.
+      #
+      # @param module_name [Symbol] Module identifier
+      # @param method_name [Symbol] Method name
+      # @param scope [Symbol] Method scope (:class or :instance)
+      # @param metadata [Hash] Optional metadata (description, parameters, return type)
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.register_query_method(
+      #     :roles,
+      #     :settings_viewable_by,
+      #     :class,
+      #     description: "Get all settings viewable by a specific role",
+      #     parameters: { role: :Symbol },
+      #     returns: "Array<Symbol>"
+      #   )
+      #
+      def register_query_method(module_name, method_name, scope, metadata = {})
+        query_methods[module_name] ||= []
+        query_methods[module_name] << {name: method_name, scope: scope, **metadata}
+      end
+
+      # Get all query methods for a module
+      #
+      # @param module_name [Symbol] Module identifier
+      # @return [Array<Hash>] Array of method info hashes
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.query_methods_for(:roles)
+      #   # => [
+      #   #   { name: :settings_viewable_by, scope: :class, description: "...", ... },
+      #   #   { name: :can_view_setting?, scope: :instance, description: "...", ... }
+      #   # ]
+      #
+      def query_methods_for(module_name)
+        query_methods[module_name] || []
+      end
+
+      # Get all registered query methods
+      #
+      # @return [Hash] Hash of module_name => array of method info hashes
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.query_methods
+      #   # => { roles: [...], pundit: [...], ... }
+      #
+      def query_methods
+        @query_methods ||= {}
+      end
+
       # Reset the registry (useful for testing)
       def reset!
         @modules = {}
@@ -446,6 +527,7 @@ module ModelSettings
         @before_change_hooks = []
         @after_change_hooks = []
         @module_callback_configs = {}
+        @query_methods = {}
       end
     end
   end

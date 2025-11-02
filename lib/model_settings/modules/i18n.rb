@@ -29,20 +29,58 @@ module ModelSettings
     module I18n
       extend ActiveSupport::Concern
 
-      included do
-        # Register this module
-        ModelSettings::ModuleRegistry.register_module(:i18n, self)
+      # Module-level registrations (executed ONCE when module is loaded)
 
-        # Register i18n option (metadata for translations)
-        ModelSettings::ModuleRegistry.register_option(:i18n) do |setting, value|
-          unless value.is_a?(Hash)
-            raise ArgumentError,
-              "i18n option must be a Hash with translation keys " \
-              "(got #{value.class}). " \
-              "Example: i18n: { label_key: 'settings.label', description_key: 'settings.desc' }"
-          end
+      # Register module
+      ModelSettings::ModuleRegistry.register_module(:i18n, self)
+
+      # Register i18n option (metadata for translations)
+      ModelSettings::ModuleRegistry.register_option(:i18n) do |setting, value|
+        unless value.is_a?(Hash)
+          raise ArgumentError,
+            "i18n option must be a Hash with translation keys " \
+            "(got #{value.class}). " \
+            "Example: i18n: { label_key: 'settings.label', description_key: 'settings.desc' }"
         end
+      end
 
+      # Register query methods for introspection
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :settings_i18n_scope, :class,
+        description: "Get default I18n scope for this model",
+        returns: "String"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :settings_with_i18n, :class,
+        description: "Get all settings with I18n metadata",
+        returns: "Array<Setting>"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :t_label_for, :instance,
+        description: "Get translated label for a setting",
+        parameters: {setting_name: :Symbol, options: :Hash},
+        returns: "String"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :t_description_for, :instance,
+        description: "Get translated description for a setting",
+        parameters: {setting_name: :Symbol, options: :Hash},
+        returns: "String, nil"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :t_help_for, :instance,
+        description: "Get translated help text for a setting",
+        parameters: {setting_name: :Symbol, options: :Hash},
+        returns: "String, nil"
+      )
+      ModelSettings::ModuleRegistry.register_query_method(
+        :i18n, :translations_for, :instance,
+        description: "Get all translations for a setting",
+        parameters: {setting_name: :Symbol, options: :Hash},
+        returns: "Hash"
+      )
+
+      included do
         # Add to active modules (if DSL is included)
         settings_add_module(:i18n) if respond_to?(:settings_add_module)
       end

@@ -8,6 +8,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Module API Centralization** (Phase 3.5): Unified metadata storage and module tracking
+  - Centralized `_module_metadata` storage replacing per-module class_attributes
+  - `ModuleRegistry.set_module_metadata(model_class, module_name, setting_name, value)`: Store metadata centrally
+  - `ModuleRegistry.get_module_metadata(model_class, module_name, setting_name = nil)`: Retrieve metadata
+  - `ModuleRegistry.module_metadata?(model_class, module_name, setting_name)`: Check metadata presence
+  - Converted all modules (Roles, Pundit, ActionPolicy) to use `on_setting_defined` hooks instead of `setting()` overrides
+  - Fixed `module_included?` to use `_active_modules` symbol registry (stable across RSpec module reloads)
+  - Updated documentation formatters to use centralized metadata API
+  - All 1124 tests passing
+
+- **Module Callback Configuration API**: Global configuration for module Rails callbacks
+  - `ModuleRegistry.register_module_callback_config(module_name, default_callback:, configurable:)`: Modules declare callback preferences
+  - `ModuleRegistry.get_module_callback(module_name)`: Get active callback (respects global config)
+  - `Configuration.module_callback(module_name, callback_name)`: Configure callbacks globally
+  - Modules can specify default callback and whether it's user-configurable
+  - Example: Configure Pundit to use `:before_save` instead of default `:before_validation`
+  - 19 new tests (10 for ModuleRegistry, 9 for Configuration)
+  - Documentation in `docs/guides/module_development.md` and `docs/core/configuration.md`
+
+- **Wave-Based Compilation**: Settings compiled by nesting level for proper dependency resolution
+  - Settings grouped by depth (0 for root, 1+ for nested) and compiled in waves
+  - Parent settings fully set up before children are processed
+  - Enables child settings to access parent settings during validation
+  - Deferred adapter setup from `setting()` to `compile_settings!`
+  - Auto-compile on instance initialization (before attribute assignment)
+  - Early validation for storage configuration and type
+  - 17 new tests in `spec/model_settings/wave_compilation_spec.rb`
+  - Documentation in `docs/core/dsl.md` with compilation order examples
+
+- **Rails Lifecycle Callbacks**: Integration with Rails model lifecycle
+  - New callbacks: `before_validation`, `after_validation`, `before_destroy`, `after_destroy`, `after_change_rollback`
+  - Callback options: `:if`, `:unless` (conditional execution), `:on` (lifecycle phase), `:prepend` (execution order)
+  - Phase parameter in `execute_setting_callbacks` for `:on` option filtering
+  - `should_execute_callback?` method for condition evaluation
+  - 13 new callback tests covering all features
+  - Documentation in `docs/core/callbacks.md`
+
+- **DSL Helpers for Module Development**: Simplified API for accessing module functionality
+  - `get_module_metadata(module_name, setting_name = nil)`: Retrieve module metadata (wrapper around ModuleRegistry)
+  - `module_metadata?(module_name, setting_name)`: Check if module has metadata for a setting
+  - `settings_check_exclusive_conflict!(module_name)`: Check for conflicts with other modules
+  - Available in ClassMethods and `included do` blocks where `self` is the model class
+  - Reduces boilerplate: `get_module_metadata(:roles)` vs `ModelSettings::ModuleRegistry.get_module_metadata(self, :roles)`
+  - Updated all authorization modules (Roles, Pundit, ActionPolicy) to use new helpers
+  - Comprehensive documentation in module development guide
+
+- **Query Method Registry**: Introspection API for discovering module methods
+  - `register_query_method(module_name, method_name, scope, metadata)`: Register methods provided by modules
+  - `query_methods_for(module_name)`: Get all methods a module provides
+  - `query_methods`: Get all registered query methods across all modules
+  - Similar to ActiveRecord's columns/associations introspection
+  - 16 query methods registered across 4 modules (Roles: 4, Pundit: 3, ActionPolicy: 3, I18n: 6)
+  - Enables IDE hints, auto-documentation, and debugging tools
+
 - **YAML and HTML Documentation Formats**: Extended documentation generator with new output formats
   - `YamlFormatter`: Generate YAML documentation for configuration management and IaC
   - `HtmlFormatter`: Generate styled HTML documentation for wikis and documentation sites
@@ -15,6 +69,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - HTML formatter includes XSS protection with proper HTML escaping
   - Updated rake tasks to support FORMAT=yaml and FORMAT=html
   - 10 new comprehensive tests (110 total documentation examples)
+
+### Changed
+- **Module Reloading Documentation**: Added comprehensive comments explaining symbol-based module tracking
+  - Documented why `_active_modules` uses symbols instead of Module objects
+  - Explained module reloading problem in RSpec and development mode
+  - Added examples showing object identity changes during reload
+  - Comments in `ModuleRegistry.module_included?`, `DSL._active_modules`, and `DSL.settings_add_module`
+
+### Documentation
+- **Updated `docs/guides/module_development.md`**: Added DSL Helpers section with usage guidelines
+  - New section explaining when to use helpers vs. direct ModuleRegistry calls
+  - Examples showing both approaches with recommendations
+  - Updated all code examples to use recommended helpers
+  - Clear explanation of context (ClassMethods, included blocks, hooks)
 
 ## [0.7.0] - 2025-11-01
 
