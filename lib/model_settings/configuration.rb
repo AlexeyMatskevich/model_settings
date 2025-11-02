@@ -19,13 +19,40 @@ module ModelSettings
       @default_modules = []
       @inherit_authorization = true # Security by default
       @inherit_settings = true # Inheritance enabled by default
+      @module_callbacks = {}
     end
+
+    # Configure callback for a specific module
+    #
+    # @param module_name [Symbol] Name of the module
+    # @param callback_name [Symbol] Rails callback to use (e.g., :before_validation, :before_save)
+    #
+    # @example
+    #   config.module_callback(:pundit, :before_save)
+    #
+    def module_callback(module_name, callback_name)
+      @module_callbacks[module_name] = callback_name
+    end
+
+    # Get configured callback for a module
+    #
+    # @param module_name [Symbol] Name of the module
+    # @return [Symbol, nil] Configured callback or nil if not set
+    def get_module_callback(module_name)
+      @module_callbacks[module_name]
+    end
+
+    # Get all configured module callbacks
+    #
+    # @return [Hash] Hash of module name => callback name
+    attr_reader :module_callbacks
 
     # Reset configuration to defaults
     def reset!
       @default_modules = []
       @inherit_authorization = true
       @inherit_settings = true
+      @module_callbacks = {}
     end
   end
 

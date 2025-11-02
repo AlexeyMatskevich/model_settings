@@ -283,6 +283,70 @@ module ModelSettings
         end
       end
 
+      # Register module callback configuration
+      #
+      # Allows modules to declare which Rails callback they use by default
+      # and whether it can be configured globally.
+      #
+      # @param module_name [Symbol] Name of the module
+      # @param default_callback [Symbol] Default Rails callback to use (e.g., :before_validation)
+      # @param configurable [Boolean] Whether the callback can be changed via global configuration
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.register_module_callback_config(
+      #     :pundit,
+      #     default_callback: :before_validation,
+      #     configurable: true
+      #   )
+      #
+      def register_module_callback_config(module_name, default_callback:, configurable: true)
+        module_callback_configs[module_name] = {
+          default_callback: default_callback,
+          configurable: configurable
+        }
+      end
+
+      # Get callback configuration for a module
+      #
+      # @param module_name [Symbol] Name of the module
+      # @return [Hash, nil] Configuration hash or nil if not registered
+      def get_module_callback_config(module_name)
+        module_callback_configs[module_name]
+      end
+
+      # Get the active callback for a module
+      #
+      # Checks global configuration first, falls back to default if not configured.
+      #
+      # @param module_name [Symbol] Name of the module
+      # @return [Symbol, nil] Callback name or nil if module not registered
+      def get_module_callback(module_name)
+        config = module_callback_configs[module_name]
+        return nil unless config
+
+        # Check if globally configured
+        configured_callback = ModelSettings.configuration.get_module_callback(module_name)
+        if configured_callback
+          # Validate that module allows configuration
+          unless config[:configurable]
+            raise ArgumentError,
+              "Module #{module_name.inspect} does not allow callback configuration " \
+              "(configurable: false in registration)"
+          end
+          return configured_callback
+        end
+
+        # Fall back to default
+        config[:default_callback]
+      end
+
+      # Get all registered module callback configurations
+      #
+      # @return [Hash] Hash of module name => config hash
+      def module_callback_configs
+        @module_callback_configs ||= {}
+      end
+
       # Reset the registry (useful for testing)
       def reset!
         @modules = {}
@@ -292,6 +356,7 @@ module ModelSettings
         @compilation_hooks = []
         @before_change_hooks = []
         @after_change_hooks = []
+        @module_callback_configs = {}
       end
     end
   end

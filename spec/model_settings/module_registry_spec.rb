@@ -485,6 +485,173 @@ RSpec.describe ModelSettings::ModuleRegistry do
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
+  describe ".register_module_callback_config" do
+    context "with default parameters" do
+      before do
+        described_class.register_module_callback_config(
+          :pundit,
+          default_callback: :before_validation
+        )
+      end
+
+      it "stores callback configuration" do
+        config = described_class.get_module_callback_config(:pundit)
+
+        expect(config).to eq({
+          default_callback: :before_validation,
+          configurable: true
+        })
+      end
+    end
+
+    context "with configurable: false" do
+      before do
+        described_class.register_module_callback_config(
+          :roles,
+          default_callback: :before_save,
+          configurable: false
+        )
+      end
+
+      it "stores non-configurable flag" do
+        config = described_class.get_module_callback_config(:roles)
+
+        expect(config[:configurable]).to be false
+      end
+    end
+  end
+
+  describe ".get_module_callback_config" do
+    context "when module is registered" do
+      before do
+        described_class.register_module_callback_config(
+          :pundit,
+          default_callback: :before_validation,
+          configurable: true
+        )
+      end
+
+      it "returns configuration hash" do
+        config = described_class.get_module_callback_config(:pundit)
+
+        expect(config).to include(
+          default_callback: :before_validation,
+          configurable: true
+        )
+      end
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when module is NOT registered" do  # No setup - testing fallback behavior
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "returns nil" do
+        config = described_class.get_module_callback_config(:nonexistent)
+
+        expect(config).to be_nil
+      end
+    end
+  end
+
+  describe ".get_module_callback" do
+    before do
+      # Reset global configuration to ensure clean state
+      ModelSettings.reset_configuration!
+    end
+
+    context "when module is registered" do
+      before do
+        described_class.register_module_callback_config(
+          :pundit,
+          default_callback: :before_validation,
+          configurable: true
+        )
+      end
+
+      # rubocop:disable RSpecGuide/ContextSetup
+      context "and no global configuration" do  # No setup - testing default callback fallback
+        # rubocop:enable RSpecGuide/ContextSetup
+        it "returns default callback" do
+          callback = described_class.get_module_callback(:pundit)
+
+          expect(callback).to eq(:before_validation)
+        end
+      end
+
+      context "and globally configured" do
+        before do
+          ModelSettings.configure do |config|
+            config.module_callback(:pundit, :before_save)
+          end
+        end
+
+        it "returns configured callback" do
+          callback = described_class.get_module_callback(:pundit)
+
+          expect(callback).to eq(:before_save)
+        end
+      end
+
+      context "and globally configured but module is NOT configurable" do
+        before do
+          described_class.register_module_callback_config(
+            :strict_module,
+            default_callback: :before_validation,
+            configurable: false
+          )
+
+          ModelSettings.configure do |config|
+            config.module_callback(:strict_module, :before_save)
+          end
+        end
+
+        it "raises ArgumentError" do
+          expect {
+            described_class.get_module_callback(:strict_module)
+          }.to raise_error(ArgumentError, /does not allow callback configuration/)
+        end
+      end
+    end
+
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when module is NOT registered" do  # No setup - testing nil return
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "returns nil" do
+        callback = described_class.get_module_callback(:nonexistent)
+
+        expect(callback).to be_nil
+      end
+    end
+  end
+
+  describe ".module_callback_configs" do
+    # rubocop:disable RSpecGuide/ContextSetup
+    context "when no configs registered" do  # No setup - testing empty hash return
+      # rubocop:enable RSpecGuide/ContextSetup
+      it "returns empty hash" do
+        expect(described_class.module_callback_configs).to eq({})
+      end
+    end
+
+    context "when configs are registered" do
+      before do
+        described_class.register_module_callback_config(
+          :pundit,
+          default_callback: :before_validation
+        )
+        described_class.register_module_callback_config(
+          :roles,
+          default_callback: :before_save
+        )
+      end
+
+      it "returns all configurations" do
+        configs = described_class.module_callback_configs
+
+        expect(configs.keys).to contain_exactly(:pundit, :roles)
+      end
+    end
+  end
+
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".reset!" do
     subject(:reset) { described_class.reset! }
@@ -497,6 +664,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       described_class.on_settings_compiled { |_s, _m| }
       described_class.before_setting_change { |_i, _s, _v| }
       described_class.after_setting_change { |_i, _s, _o, _n| }
+      described_class.register_module_callback_config(:pundit, default_callback: :before_validation)
     end
 
     it "clears all registered data", :aggregate_failures do
@@ -509,6 +677,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       expect(described_class.compilation_hooks).to be_empty
       expect(described_class.before_change_hooks).to be_empty
       expect(described_class.after_change_hooks).to be_empty
+      expect(described_class.module_callback_configs).to be_empty
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage

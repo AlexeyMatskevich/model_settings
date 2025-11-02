@@ -340,6 +340,144 @@ mod = ModelSettings::ModuleRegistry.get_module(:roles)
 
 ---
 
+### Callback Configuration
+
+#### `register_module_callback_config(module_name, default_callback:, configurable:)`
+
+Register callback configuration for a module (Sprint 11 Phase 3).
+
+Allows modules to declare which Rails callback they use by default and whether users can change it via global configuration.
+
+```ruby
+ModelSettings::ModuleRegistry.register_module_callback_config(
+  :pundit,
+  default_callback: :before_validation,
+  configurable: true
+)
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Module identifier
+- `default_callback` (Symbol) - Default Rails callback (e.g., `:before_validation`, `:before_save`)
+- `configurable` (Boolean) - Whether callback can be changed via `ModelSettings.configure`
+
+**Use Case:** Modules that need to run during Rails model lifecycle can register their preferred callback timing. Users can then globally configure when the module runs if `configurable: true`.
+
+**Example - Module Registration:**
+```ruby
+module ModelSettings
+  module Modules
+    module Pundit
+      extend ActiveSupport::Concern
+
+      included do
+        # Register module
+        ModelSettings::ModuleRegistry.register_module(:pundit, self)
+
+        # Register callback configuration
+        ModelSettings::ModuleRegistry.register_module_callback_config(
+          :pundit,
+          default_callback: :before_validation,  # Run before validation by default
+          configurable: true                      # Allow users to change this
+        )
+
+        # Use the configured callback
+        callback_name = ModelSettings::ModuleRegistry.get_module_callback(:pundit)
+        send(callback_name, :validate_authorization_settings)
+      end
+
+      def validate_authorization_settings
+        # Module logic runs at the configured time
+      end
+    end
+  end
+end
+```
+
+**Example - User Configuration:**
+```ruby
+# config/initializers/model_settings.rb
+ModelSettings.configure do |config|
+  # Change when Pundit module runs (if module allows it)
+  config.module_callback(:pundit, :before_save)
+end
+```
+
+---
+
+#### `get_module_callback_config(module_name)`
+
+Get registered callback configuration for a module.
+
+```ruby
+config = ModelSettings::ModuleRegistry.get_module_callback_config(:pundit)
+# => { default_callback: :before_validation, configurable: true }
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Module identifier
+
+**Returns:** Hash with `:default_callback` and `:configurable` keys, or `nil` if not registered
+
+---
+
+#### `get_module_callback(module_name)`
+
+Get the active callback for a module (checks global config first, falls back to default).
+
+```ruby
+callback = ModelSettings::ModuleRegistry.get_module_callback(:pundit)
+# => :before_save (if configured), or :before_validation (default)
+```
+
+**Parameters:**
+- `module_name` (Symbol) - Module identifier
+
+**Returns:** Symbol (callback name) or `nil` if module not registered
+
+**Behavior:**
+1. Checks if globally configured via `ModelSettings.configure`
+2. If configured and module is `configurable: true`, returns configured callback
+3. If configured but module is `configurable: false`, raises `ArgumentError`
+4. Otherwise returns `default_callback`
+
+**Example:**
+```ruby
+# Module registered with configurable: false
+ModelSettings::ModuleRegistry.register_module_callback_config(
+  :strict_module,
+  default_callback: :before_validation,
+  configurable: false  # Cannot be changed
+)
+
+# Attempt to configure it globally
+ModelSettings.configure do |config|
+  config.module_callback(:strict_module, :before_save)
+end
+
+# Raises ArgumentError when accessed
+ModelSettings::ModuleRegistry.get_module_callback(:strict_module)
+# => ArgumentError: Module :strict_module does not allow callback configuration
+```
+
+---
+
+#### `module_callback_configs()`
+
+Get all registered module callback configurations.
+
+```ruby
+configs = ModelSettings::ModuleRegistry.module_callback_configs
+# => {
+#      pundit: { default_callback: :before_validation, configurable: true },
+#      roles: { default_callback: :before_save, configurable: false }
+#    }
+```
+
+**Returns:** Hash of module name => config hash
+
+---
+
 ## Lifecycle Hooks
 
 Modules can hook into four lifecycle events:
