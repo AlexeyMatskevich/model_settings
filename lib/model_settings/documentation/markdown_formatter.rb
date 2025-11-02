@@ -128,25 +128,25 @@ module ModelSettings
 
       def format_authorization(setting)
         # Check Roles module
-        if model_class.respond_to?(:_settings_roles)
-          roles = model_class._settings_roles[setting.name]
-          if roles
-            parts = []
-            if roles[:viewable_by] && roles[:viewable_by] != []
-              parts << "View: #{format_roles(roles[:viewable_by])}"
-            end
-            if roles[:editable_by] && roles[:editable_by] != []
-              parts << "Edit: #{format_roles(roles[:editable_by])}"
-            end
-            return parts.join(", ") unless parts.empty?
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles, setting.name)
+        if roles
+          parts = []
+          if roles[:viewable_by] && roles[:viewable_by] != []
+            parts << "View: #{format_roles(roles[:viewable_by])}"
           end
+          if roles[:editable_by] && roles[:editable_by] != []
+            parts << "Edit: #{format_roles(roles[:editable_by])}"
+          end
+          return parts.join(", ") unless parts.empty?
         end
 
-        # Check Pundit/ActionPolicy modules
-        if model_class.respond_to?(:_authorized_settings)
-          method = model_class._authorized_settings[setting.name]
-          return "Requires `#{method}` permission" if method
-        end
+        # Check Pundit module
+        pundit_method = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :pundit, setting.name)
+        return "Requires `#{pundit_method}` permission" if pundit_method
+
+        # Check ActionPolicy module
+        action_policy_method = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :action_policy, setting.name)
+        return "Requires `#{action_policy_method}` permission" if action_policy_method
 
         nil
       end

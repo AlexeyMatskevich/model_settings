@@ -157,7 +157,7 @@ include ModelSettings::Modules::Pundit
 setting :billing, authorize_with: :manage_billing?
 ```
 
-See [Roles](../modules/roles.md), [Pundit](../modules/pundit.md), [ActionPolicy](../modules/action_policy.md).
+See [Roles](../modules/roles.md), [Pundit](../modules/policy_based/pundit.md), [ActionPolicy](../modules/policy_based/action_policy.md), or [Policy-Based Authorization Overview](../modules/policy_based/README.md).
 
 ## I18n Options
 

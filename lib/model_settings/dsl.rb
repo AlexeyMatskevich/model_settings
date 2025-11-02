@@ -41,11 +41,17 @@ module ModelSettings
       # Track active modules for this model
       class_attribute :_active_modules, default: []
 
+      # Centralized storage for all module metadata
+      # Structure: { module_name: { setting_name: metadata_value } }
+      # Example: { roles: { billing: { viewable_by: [:admin], editable_by: [:admin] } } }
+      # Note: Using instance_writer: false with custom initialization to avoid shared hash issue
+      class_attribute :_module_metadata, instance_writer: false
+      self._module_metadata = {}
+
       # Auto-include I18n module if available (for backward compatibility)
       if defined?(ModelSettings::Modules::I18n)
         include ModelSettings::Modules::I18n
-
-        _active_modules << :i18n unless _active_modules.include?(:i18n)
+        # Module will register itself via settings_add_module in its included block
       end
 
       # Auto-include default modules from configuration
@@ -88,9 +94,9 @@ module ModelSettings
         next unless module_class
 
         # Include module if not already included
+        # Module will register itself via settings_add_module in its included block
         unless base.included_modules.include?(module_class)
           base.include module_class
-          base._active_modules << module_name
         end
       end
     end
@@ -391,9 +397,6 @@ module ModelSettings
         return if _active_modules.include?(module_name)
 
         self._active_modules = _active_modules + [module_name]
-
-        # Validate exclusive groups
-        ModelSettings::ModuleRegistry.validate_exclusive_groups!(_active_modules)
       end
 
       # Configure model-specific settings

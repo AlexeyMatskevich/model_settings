@@ -99,27 +99,31 @@ module ModelSettings
 
       def format_authorization(setting)
         # Check Roles module
-        if model_class.respond_to?(:_settings_roles)
-          roles = model_class._settings_roles[setting.name]
-          if roles
-            auth = {}
-            auth[:module] = "Roles"
-            auth[:viewable_by] = format_roles_json(roles[:viewable_by]) if roles[:viewable_by]
-            auth[:editable_by] = format_roles_json(roles[:editable_by]) if roles[:editable_by]
-            return auth unless auth.keys == [:module]
-          end
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles, setting.name)
+        if roles
+          auth = {}
+          auth[:module] = "Roles"
+          auth[:viewable_by] = format_roles_json(roles[:viewable_by]) if roles[:viewable_by]
+          auth[:editable_by] = format_roles_json(roles[:editable_by]) if roles[:editable_by]
+          return auth unless auth.keys == [:module]
         end
 
-        # Check Pundit/ActionPolicy modules
-        if model_class.respond_to?(:_authorized_settings)
-          method = model_class._authorized_settings[setting.name]
-          if method
-            auth_module = detect_authorization_module
-            return {
-              module: auth_module,
-              method: method.to_s
-            }
-          end
+        # Check Pundit module
+        pundit_method = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :pundit, setting.name)
+        if pundit_method
+          return {
+            module: "Pundit",
+            method: pundit_method.to_s
+          }
+        end
+
+        # Check ActionPolicy module
+        action_policy_method = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :action_policy, setting.name)
+        if action_policy_method
+          return {
+            module: "ActionPolicy",
+            method: action_policy_method.to_s
+          }
         end
 
         nil

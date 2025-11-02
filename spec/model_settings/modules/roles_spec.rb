@@ -66,6 +66,8 @@ RSpec.describe ModelSettings::Modules::Roles do
           extend ActiveSupport::Concern
 
           included do
+            # Add to active modules FIRST (before conflict check)
+            settings_add_module(:pundit) if respond_to?(:settings_add_module)
             ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :pundit)
           end
         end
@@ -267,7 +269,7 @@ RSpec.describe ModelSettings::Modules::Roles do
     context "with single symbol" do  # Characteristic defined via setting definition
       # rubocop:enable RSpecGuide/ContextSetup
       it "normalizes to array for both viewable_by and editable_by" do
-        roles = model_class._settings_roles[:premium]
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles, :premium)
 
         aggregate_failures do
           expect(roles[:viewable_by]).to eq([:admin])
@@ -280,7 +282,7 @@ RSpec.describe ModelSettings::Modules::Roles do
     context "with array of symbols" do  # Characteristic defined via setting definition
       # rubocop:enable RSpecGuide/ContextSetup
       it "keeps array as is" do
-        roles = model_class._settings_roles[:feature]
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles, :feature)
 
         aggregate_failures do
           expect(roles[:viewable_by]).to eq([:admin, :finance])
@@ -293,7 +295,7 @@ RSpec.describe ModelSettings::Modules::Roles do
     context "with :all special value" do  # Characteristic defined via setting definition
       # rubocop:enable RSpecGuide/ContextSetup
       it "preserves :all for viewable_by" do
-        roles = model_class._settings_roles[:enabled]
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles, :enabled)
 
         expect(roles[:viewable_by]).to eq(:all)
       end
@@ -302,8 +304,10 @@ RSpec.describe ModelSettings::Modules::Roles do
     # rubocop:disable RSpecGuide/ContextSetup
     context "with nil values (no restrictions)" do  # Characteristic defined via setting definition
       # rubocop:enable RSpecGuide/ContextSetup
-      it "does NOT store in _settings_roles hash" do
-        expect(model_class._settings_roles).not_to have_key(:notifications)
+      it "does NOT store in centralized module metadata" do
+        roles_metadata = ModelSettings::ModuleRegistry.get_module_metadata(model_class, :roles)
+
+        expect(roles_metadata).not_to have_key(:notifications)
       end
     end
   end

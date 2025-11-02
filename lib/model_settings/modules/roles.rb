@@ -32,34 +32,69 @@ module ModelSettings
     module Roles
       extend ActiveSupport::Concern
 
+      # Module-level registrations (executed ONCE when module is loaded)
+
+      # Register module
+      ModelSettings::ModuleRegistry.register_module(:roles, self)
+
+      # Register as part of exclusive authorization group
+      ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :roles)
+
+      # Register viewable_by option
+      ModelSettings::ModuleRegistry.register_option(:viewable_by) do |setting, value|
+        unless value == :all || value.is_a?(Array) || value.is_a?(Symbol)
+          raise ArgumentError,
+            "viewable_by must be :all, a Symbol, or an Array of Symbols " \
+            "(got #{value.class}). " \
+            "Example: viewable_by: [:admin, :manager] or viewable_by: :all"
+        end
+      end
+
+      # Register editable_by option
+      ModelSettings::ModuleRegistry.register_option(:editable_by) do |setting, value|
+        unless value == :all || value.is_a?(Array) || value.is_a?(Symbol)
+          raise ArgumentError,
+            "editable_by must be :all, a Symbol, or an Array of Symbols " \
+            "(got #{value.class}). " \
+            "Example: editable_by: [:admin] or editable_by: :all"
+        end
+      end
+
+      # Hook to capture role metadata when settings are defined
+      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+        next unless ModelSettings::ModuleRegistry.module_included?(:roles, model_class)
+
+        if setting.options.key?(:viewable_by) || setting.options.key?(:editable_by)
+          # Normalize roles helper (inline)
+          normalize = ->(value) {
+            return :all if value == :all
+            return [] if value.nil?
+            Array(value).map(&:to_sym)
+          }
+
+          metadata = {
+            viewable_by: normalize.call(setting.options[:viewable_by]),
+            editable_by: normalize.call(setting.options[:editable_by])
+          }
+
+          ModelSettings::ModuleRegistry.set_module_metadata(
+            model_class,
+            :roles,
+            setting.name,
+            metadata
+          )
+        end
+      end
+
       included do
+        # Add to active modules FIRST (before conflict check)
+        settings_add_module(:roles) if respond_to?(:settings_add_module)
+
         # Check for conflicts with other authorization modules
         ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :roles)
-
-        # Storage for role metadata
-        class_attribute :_settings_roles, default: {}
       end
 
       module ClassMethods
-        # Override setting method to capture role options
-        #
-        # @param name [Symbol] Setting name
-        # @param options [Hash] Setting options
-        # @option options [Symbol, Array<Symbol>] :viewable_by Roles that can view this setting
-        # @option options [Array<Symbol>] :editable_by Roles that can edit this setting
-        #
-        def setting(name, **options, &block)
-          # Extract and store role options
-          if options.key?(:viewable_by) || options.key?(:editable_by)
-            _settings_roles[name] = {
-              viewable_by: normalize_roles(options.delete(:viewable_by)),
-              editable_by: normalize_roles(options.delete(:editable_by))
-            }
-          end
-
-          super
-        end
-
         # Get all settings viewable by a specific role
         #
         # @param role [Symbol] Role name
@@ -70,7 +105,9 @@ module ModelSettings
         #   # => [:billing_override, :display_name]
         #
         def settings_viewable_by(role)
-          _settings_roles.select do |_name, roles|
+          all_roles = ModelSettings::ModuleRegistry.get_module_metadata(self, :roles)
+
+          all_roles.select do |_name, roles|
             roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
           end.keys
         end
@@ -85,22 +122,11 @@ module ModelSettings
         #   # => [:billing_override]
         #
         def settings_editable_by(role)
-          _settings_roles.select do |_name, roles|
+          all_roles = ModelSettings::ModuleRegistry.get_module_metadata(self, :roles)
+
+          all_roles.select do |_name, roles|
             roles[:editable_by].include?(role.to_sym)
           end.keys
-        end
-
-        private
-
-        # Normalize role values to consistent format
-        #
-        # @param value [Symbol, Array, nil] Raw role value
-        # @return [Symbol, Array<Symbol>] Normalized roles
-        #
-        def normalize_roles(value)
-          return :all if value == :all
-          return [] if value.nil?
-          Array(value).map(&:to_sym)
         end
       end
 
@@ -117,7 +143,11 @@ module ModelSettings
       #   # => true
       #
       def can_view_setting?(setting_name, role)
-        roles = self.class._settings_roles[setting_name]
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(
+          self.class,
+          :roles,
+          setting_name
+        )
         return true unless roles # No restriction = viewable
 
         roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
@@ -134,7 +164,11 @@ module ModelSettings
       #   # => true
       #
       def can_edit_setting?(setting_name, role)
-        roles = self.class._settings_roles[setting_name]
+        roles = ModelSettings::ModuleRegistry.get_module_metadata(
+          self.class,
+          :roles,
+          setting_name
+        )
         return true unless roles # No restriction = editable
 
         roles[:editable_by].include?(role.to_sym)

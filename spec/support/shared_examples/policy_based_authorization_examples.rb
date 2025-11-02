@@ -61,6 +61,8 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
           extend ActiveSupport::Concern
 
           included do
+            # Add to active modules FIRST (before conflict check)
+            settings_add_module(:roles) if respond_to?(:settings_add_module)
             ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :roles)
           end
         end
@@ -268,7 +270,14 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
         end
 
         def permitted_settings
-          record.class._authorized_settings.select do |_name, method|
+          # Use centralized metadata API
+          auth_metadata = if record.class.included_modules.include?(ModelSettings::Modules::Pundit)
+            ModelSettings::ModuleRegistry.get_module_metadata(record.class, :pundit)
+          else
+            ModelSettings::ModuleRegistry.get_module_metadata(record.class, :action_policy)
+          end
+
+          auth_metadata.select do |_name, method|
             public_send(method)
           end.keys
         end
@@ -316,8 +325,10 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
   end
 
   describe "storage of authorization metadata" do
-    it "stores authorize_with in _authorized_settings" do
-      expect(model_class._authorized_settings).to include(
+    it "stores authorize_with in centralized module metadata" do
+      auth_metadata = ModelSettings::ModuleRegistry.get_module_metadata(model_class, module_name)
+
+      expect(auth_metadata).to include(
         billing_override: :manage_billing?,
         api_access: :admin?,
         system_config: :admin?
@@ -325,7 +336,9 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
     end
 
     it "does NOT store settings without authorization" do
-      expect(model_class._authorized_settings).not_to have_key(:display_name)
+      auth_metadata = ModelSettings::ModuleRegistry.get_module_metadata(model_class, module_name)
+
+      expect(auth_metadata).not_to have_key(:display_name)
     end
 
     context "when class_attribute isolation" do
@@ -343,9 +356,12 @@ RSpec.shared_examples "policy-based authorization module" do |module_name, modul
       end
 
       it "does NOT leak authorization between models" do
+        model_metadata = ModelSettings::ModuleRegistry.get_module_metadata(model_class, module_name)
+        other_metadata = ModelSettings::ModuleRegistry.get_module_metadata(other_model, module_name)
+
         aggregate_failures do
-          expect(model_class._authorized_settings).not_to have_key(:other_setting)
-          expect(other_model._authorized_settings).not_to have_key(:billing_override)
+          expect(model_metadata).not_to have_key(:other_setting)
+          expect(other_metadata).not_to have_key(:billing_override)
         end
       end
     end

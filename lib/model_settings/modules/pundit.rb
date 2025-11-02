@@ -60,31 +60,48 @@ module ModelSettings
     module Pundit
       extend ActiveSupport::Concern
 
+      # Module-level registrations (executed ONCE when module is loaded)
+
+      # Register module
+      ModelSettings::ModuleRegistry.register_module(:pundit, self)
+
+      # Register as part of exclusive authorization group
+      ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :pundit)
+
+      # Register authorize_with option
+      ModelSettings::ModuleRegistry.register_option(:authorize_with) do |setting, value|
+        unless value.is_a?(Symbol)
+          raise ArgumentError,
+            "authorize_with must be a Symbol pointing to a policy method " \
+            "(got #{value.class}). " \
+            "Example: authorize_with: :manage_billing?\n" \
+            "Use Roles Module for simple role-based checks with arrays."
+        end
+      end
+
+      # Hook to capture authorization metadata when settings are defined
+      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+        next unless ModelSettings::ModuleRegistry.module_included?(:pundit, model_class)
+
+        if setting.options.key?(:authorize_with)
+          ModelSettings::ModuleRegistry.set_module_metadata(
+            model_class,
+            :pundit,
+            setting.name,
+            setting.options[:authorize_with]
+          )
+        end
+      end
+
       included do
+        # Add to active modules FIRST (before conflict check)
+        settings_add_module(:pundit) if respond_to?(:settings_add_module)
+
         # Check for conflicts with other authorization modules
         ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :pundit)
-
-        # Storage for authorization metadata
-        class_attribute :_authorized_settings, default: {}
       end
 
       module ClassMethods
-        # Override setting method to capture authorize_with option
-        #
-        # @param name [Symbol] Setting name
-        # @param options [Hash] Setting options
-        # @option options [Symbol] :authorize_with Policy method name to check authorization
-        #
-        def setting(name, **options, &block)
-          # Extract and validate authorize_with option
-          if options.key?(:authorize_with)
-            validate_authorize_with!(options[:authorize_with])
-            _authorized_settings[name] = options.delete(:authorize_with)
-          end
-
-          super
-        end
-
         # Get the authorization method for a specific setting
         #
         # @param name [Symbol] Setting name
@@ -95,7 +112,7 @@ module ModelSettings
         #   # => :manage_billing?
         #
         def authorization_for_setting(name)
-          _authorized_settings[name]
+          ModelSettings::ModuleRegistry.get_module_metadata(self, :pundit, name)
         end
 
         # Get all settings that require a specific permission
@@ -108,7 +125,9 @@ module ModelSettings
         #   # => [:api_access, :system_config]
         #
         def settings_requiring(permission)
-          _authorized_settings.select { |_name, method| method == permission }.keys
+          all_auth = ModelSettings::ModuleRegistry.get_module_metadata(self, :pundit)
+
+          all_auth.select { |_name, method| method == permission }.keys
         end
 
         # Get all settings that have authorization
@@ -116,24 +135,7 @@ module ModelSettings
         # @return [Array<Symbol>] Array of setting names
         #
         def authorized_settings
-          _authorized_settings.keys
-        end
-
-        private
-
-        # Validate that authorize_with is a Symbol
-        #
-        # @param value [Object] Value to validate
-        # @raise [ArgumentError] If value is not a Symbol
-        #
-        def validate_authorize_with!(value)
-          unless value.is_a?(Symbol)
-            raise ArgumentError,
-              "authorize_with must be a Symbol pointing to a policy method " \
-              "(got #{value.class}). " \
-              "Example: authorize_with: :manage_billing?\n" \
-              "Use Roles Module for simple role-based checks with arrays."
-          end
+          ModelSettings::ModuleRegistry.get_module_metadata(self, :pundit).keys
         end
       end
     end

@@ -106,34 +106,50 @@ module ModelSettings
     module MyModule
       extend ActiveSupport::Concern
 
+      # Module-level registrations (executed ONCE when module is loaded)
+
+      # 1. Register module
+      ModelSettings::ModuleRegistry.register_module(:my_module, self)
+
+      # 2. Register as part of exclusive authorization group (optional)
+      ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :my_module)
+
+      # 3. Register custom DSL options with validators
+      ModelSettings::ModuleRegistry.register_option(:my_option) do |setting, value|
+        unless valid?(value)
+          raise ArgumentError, "Invalid value for my_option: #{value}"
+        end
+      end
+
+      # 4. Register lifecycle hooks to capture metadata
+      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+        # Only process settings for models that include THIS module
+        next unless ModelSettings::ModuleRegistry.module_included?(:my_module, model_class)
+
+        if setting.options.key?(:my_option)
+          # Store metadata centrally using ModuleRegistry
+          ModelSettings::ModuleRegistry.set_module_metadata(
+            model_class,
+            :my_module,
+            setting.name,
+            setting.options[:my_option]
+          )
+        end
+      end
+
       included do
-        # 1. Register module (for tracking and conflict detection)
-        ModelSettings::ModuleRegistry.register_module(:my_module, self)
+        # 5. Add to active modules FIRST (before conflict check)
+        settings_add_module(:my_module) if respond_to?(:settings_add_module)
 
-        # 2. Register exclusive group (optional, for mutually exclusive modules)
-        ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :my_module)
-
-        # 3. Check for conflicts with other modules
+        # 6. Check for conflicts with other modules
         ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :my_module)
-
-        # 4. Register custom DSL options
-        ModelSettings::ModuleRegistry.register_option(:my_option) do |setting, value|
-          # Optional validator
-          raise ArgumentError, "Invalid value" unless valid?(value)
-        end
-
-        # 5. Register lifecycle hooks
-        ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
-          # Process setting when defined
-        end
-
-        # 6. Add module to active modules list
-        settings_add_module(:my_module)
       end
 
       # Class methods added to model
       module ClassMethods
         def my_class_method
+          # Retrieve metadata using centralized API
+          metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :my_module)
           # ...
         end
       end
@@ -340,7 +356,207 @@ mod = ModelSettings::ModuleRegistry.get_module(:roles)
 
 ---
 
+### Centralized Metadata Storage
+
+#### `set_module_metadata(model_class, module_name, setting_name, metadata)`
+
+Store module-specific metadata for a setting in centralized storage.
+
+```ruby
+ModelSettings::ModuleRegistry.set_module_metadata(
+  User,
+  :roles,
+  :billing_override,
+  { viewable_by: [:admin, :finance], editable_by: [:admin] }
+)
+```
+
+**Parameters:**
+- `model_class` (Class) - The model class
+- `module_name` (Symbol) - Module identifier
+- `setting_name` (Symbol) - Setting name
+- `metadata` (Object) - Metadata value to store (any object)
+
+**Use Case:** Store module-specific data during `on_setting_defined` hooks.
+
+**Best Practice:** Use this in your `on_setting_defined` hook to capture option values:
+
+```ruby
+ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+  next unless ModelSettings::ModuleRegistry.module_included?(:my_module, model_class)
+
+  if setting.options.key?(:my_option)
+    ModelSettings::ModuleRegistry.set_module_metadata(
+      model_class,
+      :my_module,
+      setting.name,
+      setting.options[:my_option]
+    )
+  end
+end
+```
+
+---
+
+#### `get_module_metadata(model_class, module_name, setting_name = nil)`
+
+Retrieve module-specific metadata from centralized storage.
+
+```ruby
+# Get metadata for specific setting
+roles = ModelSettings::ModuleRegistry.get_module_metadata(User, :roles, :billing_override)
+# => { viewable_by: [:admin, :finance], editable_by: [:admin] }
+
+# Get all metadata for a module
+all_roles = ModelSettings::ModuleRegistry.get_module_metadata(User, :roles)
+# => { billing_override: {...}, api_access: {...} }
+```
+
+**Parameters:**
+- `model_class` (Class) - The model class
+- `module_name` (Symbol) - Module identifier
+- `setting_name` (Symbol, optional) - Setting name (omit to get all settings)
+
+**Returns:**
+- If `setting_name` provided: Metadata value or `nil`
+- If `setting_name` omitted: Hash of `setting_name => metadata`
+
+**Use Case:** Query methods in ClassMethods that need to access stored metadata.
+
+**Example - Query Method:**
+
+```ruby
+module ClassMethods
+  # Get all settings with specific option value
+  def settings_with_my_option(value)
+    all_metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :my_module)
+    all_metadata.select { |name, data| data == value }.keys
+  end
+end
+```
+
+---
+
+#### `module_metadata?(model_class, module_name, setting_name)`
+
+Check if module has metadata for a setting.
+
+```ruby
+if ModelSettings::ModuleRegistry.module_metadata?(User, :roles, :billing_override)
+  # Module has stored metadata for this setting
+end
+```
+
+**Parameters:**
+- `model_class` (Class) - The model class
+- `module_name` (Symbol) - Module identifier
+- `setting_name` (Symbol) - Setting name
+
+**Returns:** Boolean
+
+---
+
 ### Callback Configuration
+
+#### When to Use Callback Configuration
+
+The Callback Configuration API is designed for modules that need to execute **runtime logic** during the Rails model lifecycle (save, validation, commit, etc.).
+
+**✅ USE Callback Configuration for modules with runtime logic:**
+
+Module types that should use callback configuration:
+- **Audit logging** - Log changes during save/commit
+- **Workflow** - State machine transitions during lifecycle
+- **Notifications** - Send alerts after changes
+- **Validation** - Custom validation logic at specific timing
+- **Data synchronization** - Synchronize with external systems
+
+These module types need to run code when model instances change, so they benefit from configurable callback timing.
+
+**Example**: The included `SimpleAudit` module demonstrates proper usage.
+
+**❌ DON'T USE Callback Configuration for compile-time only modules:**
+
+- **Authorization modules** (Roles, Pundit, ActionPolicy)
+  - These only store metadata at definition time (during `setting` call)
+  - Authorization happens in **controller** via policy, NOT in model
+  - They intercept the `setting()` DSL method to capture options
+  - No runtime validation in model callbacks
+
+- **I18n** - Only stores translation keys at definition time
+- **Documentation** - Only generates docs at compilation time
+
+These modules work during class loading and don't need to execute during model lifecycle.
+
+**Key Distinction:**
+
+```ruby
+# Compile-time module (no callbacks needed):
+module ModelSettings::Modules::Roles
+  # Register hook to capture metadata at definition time
+  ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+    next unless ModelSettings::ModuleRegistry.module_included?(:roles, model_class)
+
+    if setting.options.key?(:viewable_by) || setting.options.key?(:editable_by)
+      # Store metadata centrally
+      metadata = {
+        viewable_by: Array(setting.options[:viewable_by]),
+        editable_by: Array(setting.options[:editable_by])
+      }
+      ModelSettings::ModuleRegistry.set_module_metadata(
+        model_class, :roles, setting.name, metadata
+      )
+    end
+  end
+end
+
+# Runtime module (needs callbacks):
+module ModelSettings::Modules::AuditTrail
+  included do
+    # Register callback to run during model lifecycle
+    callback_name = get_module_callback(:audit_trail)
+    send(callback_name, :log_setting_changes)
+  end
+
+  def log_setting_changes
+    # Executes during save/validation/commit
+    AuditLog.create!(changes: changes)
+  end
+end
+```
+
+**Current Authorization Architecture:**
+
+Authorization happens in the **controller**, not the model. Authorization modules work differently depending on which framework you use:
+
+**Pundit:**
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize @user
+    @user.update(permitted_attributes(@user))  # Standard Pundit
+  end
+end
+```
+
+**ActionPolicy:**
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize! @user
+    filtered_params = authorized(params.require(:user))  # Standard ActionPolicy
+    @user.update(filtered_params)
+  end
+end
+```
+
+The model itself doesn't validate authorization - it just stores the metadata that the controller/policy uses.
+
+**See Also:** [Policy-Based Authorization](../modules/policy_based/README.md), [Pundit Module](../modules/policy_based/pundit.md), [ActionPolicy Module](../modules/policy_based/action_policy.md)
+
+---
 
 #### `register_module_callback_config(module_name, default_callback:, configurable:)`
 
@@ -833,7 +1049,9 @@ end
 
 ## Complete Example
 
-Here's a complete module implementing audit trail functionality:
+Here's a complete example module demonstrating audit trail functionality.
+
+**Note**: This is example/demonstration code for learning module development. Study `SimpleAudit` (included) and this example to understand Module Development patterns.
 
 ```ruby
 # frozen_string_literal: true
@@ -857,74 +1075,81 @@ module ModelSettings
     module AuditTrail
       extend ActiveSupport::Concern
 
-      included do
-        # 1. Register module
-        ModelSettings::ModuleRegistry.register_module(:audit_trail, self)
+      # Module-level registrations
 
-        # 2. Register DSL option with validator
-        ModelSettings::ModuleRegistry.register_option(:audit_log) do |setting, value|
-          valid_levels = [:none, :changes_only, :full]
-          unless valid_levels.include?(value)
-            raise ArgumentError,
-                  "audit_log must be one of #{valid_levels.inspect}, got #{value.inspect}"
-          end
+      # 1. Register module
+      ModelSettings::ModuleRegistry.register_module(:audit_trail, self)
+
+      # 2. Register DSL option with validator
+      ModelSettings::ModuleRegistry.register_option(:audit_log) do |setting, value|
+        valid_levels = [:none, :changes_only, :full]
+        unless valid_levels.include?(value)
+          raise ArgumentError,
+                "audit_log must be one of #{valid_levels.inspect}, got #{value.inspect}"
         end
+      end
 
-        # 3. Definition-time validation
-        ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
-          next unless setting.audit_log
+      # 3. Hook to capture audit_log metadata
+      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+        next unless ModelSettings::ModuleRegistry.module_included?(:audit_trail, model_class)
 
-          # Validate audit_log is compatible with setting type
-          if setting.type == :store_model && setting.audit_log == :full
+        if setting.options.key?(:audit_log)
+          # Store metadata centrally
+          ModelSettings::ModuleRegistry.set_module_metadata(
+            model_class,
+            :audit_trail,
+            setting.name,
+            setting.options[:audit_log]
+          )
+
+          # Definition-time validation
+          if setting.type == :store_model && setting.options[:audit_log] == :full
             Rails.logger.warn(
               "Setting #{setting.name}: :full audit logging for StoreModel may " \
               "produce large logs. Consider using :changes_only."
             )
           end
         end
+      end
 
-        # 4. Compilation-time indexing
-        ModelSettings::ModuleRegistry.on_settings_compiled do |settings, model_class|
-          # Build index of audited settings (idempotent)
-          model_class._audited_settings = settings.select do |s|
-            s.audit_log && s.audit_log != :none
-          end.map(&:name)
-        end
+      # 4. Runtime logging hook
+      ModelSettings::ModuleRegistry.after_setting_change do |instance, setting, old_value, new_value|
+        audit_level = ModelSettings::ModuleRegistry.get_module_metadata(
+          instance.class,
+          :audit_trail,
+          setting.name
+        )
 
-        # 5. Runtime logging
-        ModelSettings::ModuleRegistry.after_setting_change do |instance, setting, old_value, new_value|
-          next unless setting.audit_log && setting.audit_log != :none
+        next unless audit_level && audit_level != :none
 
-          begin
-            log_entry = {
-              model_class: instance.class.name,
-              model_id: instance.id,
-              setting_name: setting.name,
-              old_value: serialize_value(old_value),
-              new_value: serialize_value(new_value),
-              changed_at: Time.current
-            }
+        begin
+          log_entry = {
+            model_class: instance.class.name,
+            model_id: instance.id,
+            setting_name: setting.name,
+            old_value: old_value.to_s,
+            new_value: new_value.to_s,
+            changed_at: Time.current
+          }
 
-            # Include full state for :full audit level
-            if setting.audit_log == :full
-              log_entry[:full_state] = instance.settings.map { |s|
-                [s.name, instance.public_send(s.name)]
-              }.to_h
-            end
-
-            AuditLog.create!(log_entry)
-          rescue => e
-            # Don't crash the application if audit logging fails
-            Rails.logger.error("Failed to create audit log: #{e.message}")
-            Rails.logger.error(e.backtrace.join("\n"))
+          # Include full state for :full audit level
+          if audit_level == :full
+            log_entry[:full_state] = instance.settings.map { |s|
+              [s.name, instance.public_send(s.name)]
+            }.to_h
           end
+
+          AuditLog.create!(log_entry)
+        rescue => e
+          # Don't crash the application if audit logging fails
+          Rails.logger.error("Failed to create audit log: #{e.message}")
+          Rails.logger.error(e.backtrace.join("\n"))
         end
+      end
 
-        # 6. Add to active modules
-        settings_add_module(:audit_trail)
-
-        # 7. Storage for audited settings list
-        class_attribute :_audited_settings, default: []
+      included do
+        # 5. Add to active modules FIRST
+        settings_add_module(:audit_trail) if respond_to?(:settings_add_module)
       end
 
       # Class methods
@@ -933,7 +1158,9 @@ module ModelSettings
         #
         # @return [Array<Setting>] Settings with audit_log != :none
         def audited_settings
-          _audited_settings.map { |name| find_setting(name) }.compact
+          all_audit_metadata = ModelSettings::ModuleRegistry.get_module_metadata(self, :audit_trail)
+          setting_names = all_audit_metadata.select { |_name, level| level && level != :none }.keys
+          setting_names.map { |name| find_setting(name) }.compact
         end
 
         # Check if a setting is audited
@@ -941,7 +1168,12 @@ module ModelSettings
         # @param setting_name [Symbol] Setting name
         # @return [Boolean]
         def setting_audited?(setting_name)
-          _audited_settings.include?(setting_name.to_sym)
+          audit_level = ModelSettings::ModuleRegistry.get_module_metadata(
+            self,
+            :audit_trail,
+            setting_name.to_sym
+          )
+          audit_level.present? && audit_level != :none
         end
       end
 
@@ -990,12 +1222,12 @@ module ModelSettings
 end
 ```
 
-**Usage:**
+**Example Usage** (if this module were implemented):
 
 ```ruby
 class Account < ApplicationRecord
   include ModelSettings::DSL
-  include ModelSettings::Modules::AuditTrail
+  include ModelSettings::Modules::AuditTrail  # Example only - not included
 
   setting :billing_enabled,
           type: :column,
@@ -1113,8 +1345,8 @@ end
 
 - [Configuration](../core/configuration.md) - Global configuration options
 - [Roles Module](../modules/roles.md) - Reference implementation
-- [Pundit Module](../modules/pundit.md) - Reference implementation
-- [ActionPolicy Module](../modules/action_policy.md) - Reference implementation
+- [Pundit Module](../modules/policy_based/pundit.md) - Reference implementation
+- [ActionPolicy Module](../modules/policy_based/action_policy.md) - Reference implementation
 - [I18n Module](../modules/i18n.md) - Reference implementation
 
 ---

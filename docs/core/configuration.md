@@ -93,25 +93,75 @@ Used by Roles, Pundit, and ActionPolicy modules for inheriting `viewable_by`, `e
 
 Configure when a module's logic runs in the Rails lifecycle (Sprint 11 Phase 3).
 
+**Important**: This option is only relevant for modules with **runtime logic** that execute during model lifecycle events (save, validation, commit). Most built-in modules (Roles, Pundit, ActionPolicy, I18n) work at compile-time only and do NOT use callbacks.
+
 ```ruby
 ModelSettings.configure do |config|
-  # Change when Pundit module runs
-  config.module_callback(:pundit, :before_save)
+  # Configure runtime modules
+  config.module_callback(:simple_audit, :after_commit)
+  config.module_callback(:workflow, :before_save)
 end
 ```
 
 **Parameters:**
-- `module_name` (Symbol) - Module identifier (e.g., `:pundit`, `:roles`)
+- `module_name` (Symbol) - Module identifier (e.g., `:simple_audit`, `:workflow`)
 - `callback_name` (Symbol) - Rails callback (e.g., `:before_validation`, `:before_save`, `:after_commit`)
 
+**Which Modules Use This?**
+
+✅ **Module types that benefit from callback configuration** (runtime logic):
+- Audit logging modules - Log changes during save/commit
+- Workflow modules - State machine transitions
+- Notification modules - Send alerts after changes
+- Custom modules that need to run code when settings change
+
+**Example**: `SimpleAudit` module (included as demonstration)
+
+❌ **Built-in modules that DON'T use this** (compile-time only):
+- `Roles` - Only stores metadata at definition time
+- `Pundit` - Only stores authorization rules at definition time
+- `ActionPolicy` - Only stores policy references at definition time
+- `I18n` - Only stores translation keys at definition time
+
+**Why the distinction?**
+
+Authorization modules (Roles, Pundit, ActionPolicy) only intercept the `setting()` DSL method to capture metadata. The actual authorization happens in the **controller**, not the model.
+
+**Example - Pundit:**
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize @user
+    @user.update(permitted_attributes(@user))  # Standard Pundit
+  end
+end
+```
+
+**Example - ActionPolicy:**
+```ruby
+class UsersController < ApplicationController
+  def update
+    @user = User.find(params[:id])
+    authorize! @user
+    filtered_params = authorized(params.require(:user))  # Standard ActionPolicy
+    @user.update(filtered_params)
+  end
+end
+```
+
+Runtime modules like SimpleAudit need to execute code when the model saves, so they benefit from configurable callback timing.
+
+**See Also:** [Policy-Based Authorization](../modules/policy_based/README.md), [Pundit Module](../modules/policy_based/pundit.md), [ActionPolicy Module](../modules/policy_based/action_policy.md)
+
 **Default Callbacks** (per module):
-- Most authorization modules default to `:before_validation`
-- Check module documentation for specifics
+- Check module documentation for default callback timing
+- Not all modules support callback configuration
 
 **When to change:**
-- Performance optimization (run validation later in lifecycle)
+- Performance optimization (run logic later in lifecycle)
 - Integration requirements (coordinate with other gems)
-- Testing strategies (control callback timing)
+- Testing strategies (control execution timing)
 
 **Example - Multiple Modules:**
 ```ruby
@@ -184,8 +234,8 @@ User.inherit_settings  # => true
 
 - [Settings Inheritance](inheritance.md) - How `inherit_settings` works
 - [Roles Module](../modules/roles.md) - Uses `inherit_authorization`
-- [Pundit Module](../modules/pundit.md) - Uses `inherit_authorization`
-- [ActionPolicy Module](../modules/action_policy.md) - Uses `inherit_authorization`
+- [Pundit Module](../modules/policy_based/pundit.md) - Uses `inherit_authorization`
+- [ActionPolicy Module](../modules/policy_based/action_policy.md) - Uses `inherit_authorization`
 
 ## Summary
 

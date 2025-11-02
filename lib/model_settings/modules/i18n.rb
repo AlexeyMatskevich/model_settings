@@ -32,6 +32,19 @@ module ModelSettings
       included do
         # Register this module
         ModelSettings::ModuleRegistry.register_module(:i18n, self)
+
+        # Register i18n option (metadata for translations)
+        ModelSettings::ModuleRegistry.register_option(:i18n) do |setting, value|
+          unless value.is_a?(Hash)
+            raise ArgumentError,
+              "i18n option must be a Hash with translation keys " \
+              "(got #{value.class}). " \
+              "Example: i18n: { label_key: 'settings.label', description_key: 'settings.desc' }"
+          end
+        end
+
+        # Add to active modules (if DSL is included)
+        settings_add_module(:i18n) if respond_to?(:settings_add_module)
       end
 
       module ClassMethods

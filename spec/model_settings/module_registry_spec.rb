@@ -4,10 +4,44 @@ require "spec_helper"
 
 # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::ModuleRegistry do
-  # Ensure clean slate for each test
+  # Save original state before each test
+  before do
+    @original_modules = described_class.modules.dup
+    @original_groups = described_class.exclusive_groups.deep_dup
+    @original_options = described_class.registered_options.dup
+    @original_definition_hooks = described_class.definition_hooks.dup
+    @original_compilation_hooks = described_class.compilation_hooks.dup
+  end
+
+  # Restore original state after each test
+  # rubocop:disable RSpec/InstanceVariable
   after do
     described_class.reset!
+
+    # Restore saved state
+    @original_modules.each do |name, mod|
+      described_class.register_module(name, mod)
+    end
+
+    @original_groups.each do |group_name, module_names|
+      module_names.each do |module_name|
+        described_class.register_exclusive_group(group_name, module_name)
+      end
+    end
+
+    @original_options.each do |option_name, validator|
+      described_class.register_option(option_name, validator)
+    end
+
+    @original_definition_hooks.each do |hook|
+      described_class.on_setting_defined(&hook)
+    end
+
+    @original_compilation_hooks.each do |hook|
+      described_class.on_settings_compiled(&hook)
+    end
   end
+  # rubocop:enable RSpec/InstanceVariable
 
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".register_module" do
@@ -22,6 +56,11 @@ RSpec.describe ModelSettings::ModuleRegistry do
 
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".register_exclusive_group" do
+    # These tests need a clean slate
+    before do
+      described_class.instance_variable_set(:@exclusive_groups, {})
+    end
+
     it "creates new group with module" do
       described_class.register_exclusive_group(:authorization, :pundit)
 
@@ -107,7 +146,15 @@ RSpec.describe ModelSettings::ModuleRegistry do
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".module_included?" do
-    let(:test_module) { Module.new }
+    let(:test_module) do
+      Module.new do
+        extend ActiveSupport::Concern
+
+        included do
+          settings_add_module(:test_mod) if respond_to?(:settings_add_module)
+        end
+      end
+    end
     let(:model_class) do
       Class.new(ActiveRecord::Base) do
         self.table_name = "test_models"
@@ -161,10 +208,11 @@ RSpec.describe ModelSettings::ModuleRegistry do
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".on_setting_defined" do
     it "registers definition hook" do
+      initial_size = described_class.definition_hooks.size
       hook_called = false
       described_class.on_setting_defined { |_setting, _model| hook_called = true }
 
-      expect(described_class.definition_hooks.size).to eq(1)
+      expect(described_class.definition_hooks.size).to eq(initial_size + 1)
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
@@ -271,8 +319,24 @@ RSpec.describe ModelSettings::ModuleRegistry do
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".check_exclusive_conflict!" do
-    let(:pundit_module) { Module.new }
-    let(:roles_module) { Module.new }
+    let(:pundit_module) do
+      Module.new do
+        extend ActiveSupport::Concern
+
+        included do
+          settings_add_module(:pundit) if respond_to?(:settings_add_module)
+        end
+      end
+    end
+    let(:roles_module) do
+      Module.new do
+        extend ActiveSupport::Concern
+
+        included do
+          settings_add_module(:roles) if respond_to?(:settings_add_module)
+        end
+      end
+    end
     let(:model_class) do
       Class.new(ActiveRecord::Base) do
         self.table_name = "test_models"

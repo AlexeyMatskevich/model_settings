@@ -73,9 +73,12 @@ module ModelSettings
       # @return [Boolean] true if module is included
       def module_included?(module_name, model_class)
         return false unless modules.key?(module_name)
+        return false unless model_class.respond_to?(:_active_modules)
 
-        mod = modules[module_name]
-        model_class.included_modules.include?(mod)
+        # Use _active_modules registry instead of included_modules
+        # This avoids issues with module reloading where object identity changes
+        # _active_modules stores symbols, which are stable across reloads
+        model_class._active_modules.include?(module_name)
       end
 
       # Register a hook to run when a setting is defined
@@ -345,6 +348,92 @@ module ModelSettings
       # @return [Hash] Hash of module name => config hash
       def module_callback_configs
         @module_callback_configs ||= {}
+      end
+
+      # Set module-specific metadata for a setting
+      #
+      # Stores metadata in the centralized _module_metadata storage.
+      #
+      # @param model_class [Class] The model class
+      # @param module_name [Symbol] Name of the module
+      # @param setting_name [Symbol] Name of the setting
+      # @param metadata [Object] Metadata to store
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.set_module_metadata(
+      #     User, :roles, :billing, { viewable_by: [:admin], editable_by: [:admin] }
+      #   )
+      #
+      def set_module_metadata(model_class, module_name, setting_name, metadata)
+        # Ensure this class has its own isolated copy of _module_metadata hash
+        # This prevents shared hash issues with class_attribute inheritance
+
+        # Strategy: Before making the FIRST write for this module, check if we need isolation
+        # We only need to check once per module per class
+        current_meta = model_class._module_metadata
+
+        # If this module doesn't exist in metadata yet, this is the first write
+        # Check if we're sharing the hash object with parent or siblings
+        unless current_meta.key?(module_name)
+          # Check all ancestor classes (except Object/BasicObject)
+          model_class.ancestors.each do |ancestor|
+            next unless ancestor.is_a?(Class)
+            next if [Object, BasicObject, ActiveRecord::Base].include?(ancestor)
+            next unless ancestor.respond_to?(:_module_metadata)
+            next if ancestor == model_class
+
+            begin
+              ancestor_meta = ancestor._module_metadata
+              # If we share the same object with ANY ancestor, create our own copy
+              if ancestor_meta && current_meta.equal?(ancestor_meta)
+                model_class._module_metadata = current_meta.deep_dup
+                current_meta = model_class._module_metadata
+                break
+              end
+            rescue
+              # Ancestor doesn't have _module_metadata, skip it
+              next
+            end
+          end
+        end
+
+        # Initialize module hash if needed
+        model_class._module_metadata[module_name] ||= {}
+        # Set the metadata
+        model_class._module_metadata[module_name][setting_name] = metadata
+      end
+
+      # Get module-specific metadata for a setting
+      #
+      # Retrieves metadata from the centralized _module_metadata storage.
+      #
+      # @param model_class [Class] The model class
+      # @param module_name [Symbol] Name of the module
+      # @param setting_name [Symbol, nil] Name of the setting (nil for all settings)
+      # @return [Object, Hash, nil] Metadata value or hash of all settings
+      #
+      # @example Get specific setting metadata
+      #   ModelSettings::ModuleRegistry.get_module_metadata(User, :roles, :billing)
+      #   # => { viewable_by: [:admin], editable_by: [:admin] }
+      #
+      # @example Get all settings metadata for a module
+      #   ModelSettings::ModuleRegistry.get_module_metadata(User, :roles)
+      #   # => { billing: {...}, api_access: {...} }
+      #
+      def get_module_metadata(model_class, module_name, setting_name = nil)
+        module_metadata = model_class._module_metadata[module_name] || {}
+        setting_name ? module_metadata[setting_name] : module_metadata
+      end
+
+      # Check if module has metadata for a setting
+      #
+      # @param model_class [Class] The model class
+      # @param module_name [Symbol] Name of the module
+      # @param setting_name [Symbol] Name of the setting
+      # @return [Boolean]
+      #
+      def module_metadata?(model_class, module_name, setting_name)
+        model_class._module_metadata.dig(module_name, setting_name).present?
       end
 
       # Reset the registry (useful for testing)

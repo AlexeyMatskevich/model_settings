@@ -28,8 +28,9 @@ Everything you need to know about ModelSettings core features:
 Extend ModelSettings with powerful modules:
 
 - **[Roles Module](modules/roles.md)** - Role-based access control (RBAC) with `viewable_by`/`editable_by`
-- **[Pundit Module](modules/pundit.md)** - Pundit policy integration for authorization
-- **[ActionPolicy Module](modules/action_policy.md)** - ActionPolicy integration for authorization
+- **[Policy-Based Authorization](modules/policy_based/README.md)** - Pundit and ActionPolicy integration
+  - [Pundit Module](modules/policy_based/pundit.md)
+  - [ActionPolicy Module](modules/policy_based/action_policy.md)
 - **[I18n Module](modules/i18n.md)** - Internationalization for labels and descriptions
 - **[Documentation Generator](modules/documentation.md)** - Auto-generate Markdown/JSON docs
 
@@ -75,7 +76,7 @@ Learn how to use ModelSettings effectively:
 → See [Dependencies - Syncs](core/dependencies.md#syncs)
 
 **Control who can view/edit settings**
-→ See [Roles Module](modules/roles.md), [Pundit Module](modules/pundit.md), or [ActionPolicy Module](modules/action_policy.md)
+→ See [Roles Module](modules/roles.md) or [Policy-Based Authorization](modules/policy_based/README.md)
 
 **Inherit settings from parent model**
 → See [Settings Inheritance](core/inheritance.md)
