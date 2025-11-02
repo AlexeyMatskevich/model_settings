@@ -184,6 +184,97 @@ setting :features, type: :json, storage: {column: :data} do
 end
 ```
 
+**Important**: Nested settings are compiled in waves by depth level. See [Settings Compilation](#settings-compilation) below for details.
+
+## Settings Compilation
+
+ModelSettings uses **wave-based compilation** to process settings by nesting level (depth), ensuring parent settings are fully set up before their children are processed.
+
+### Why Wave-Based Compilation?
+
+Wave-based compilation enables:
+- **Proper inheritance**: Child settings can access parent configuration during validation
+- **Dependency resolution**: Parent adapters are set up before children need them
+- **Authorization inheritance**: Children can inherit authorization from parents (Phase 4)
+- **Predictable order**: Settings are always processed in a deterministic order
+
+### How It Works
+
+Settings are grouped by depth and processed in waves:
+
+```ruby
+setting :billing do              # Level 0 (Wave 0)
+  setting :invoices do           # Level 1 (Wave 1)
+    setting :tax_reports         # Level 2 (Wave 2)
+  end
+  setting :payments              # Level 1 (Wave 1)
+end
+setting :api_access              # Level 0 (Wave 0)
+
+# Compilation order:
+# Wave 0: :billing, :api_access     (in definition order)
+# Wave 1: :invoices, :payments      (in definition order)
+# Wave 2: :tax_reports              (in definition order)
+```
+
+**Within each wave**, settings are processed in definition order, ensuring predictable behavior.
+
+### When Compilation Happens
+
+Compilation is **lazy** and **idempotent**:
+- Triggered automatically on first access (`User.settings`, `User.find_setting(:name)`)
+- Triggered automatically when creating an instance (`User.new`)
+- Can be manually triggered with `User.compile_settings!`
+- Safe to call multiple times (subsequent calls are no-ops)
+
+### Implementation Details
+
+During compilation, for each wave:
+1. Settings at the current depth level are identified
+2. For each setting in definition order:
+   - Storage adapter is set up (`adapter.setup!`)
+   - Helper methods are defined (`enable!`, `disable!`, etc.)
+   - Validations are registered
+3. After all waves complete:
+   - Compilation hooks are executed
+   - Dependency engine is compiled
+
+### Storage Configuration Validation
+
+Storage configuration (`:type`, `:storage` options) is validated **early** during setting definition, not during compilation. This ensures configuration errors are caught immediately when the class is loaded.
+
+```ruby
+# This raises ArgumentError immediately, not during compilation:
+setting :invalid, type: :json  # Missing required :storage option
+```
+
+### Example: Parent-Child Access
+
+Wave-based compilation enables children to access parent settings:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :billing, type: :column, default: false do
+    setting :invoices,
+            type: :column,
+            validate_with: -> {
+              # Parent setting is already compiled and accessible
+              errors.add(:invoices, "requires billing") unless billing?
+            }
+  end
+end
+```
+
+### Testing
+
+Wave compilation behavior is tested in `spec/model_settings/wave_compilation_spec.rb`:
+- Compilation order by depth
+- Settings processed in definition order
+- Adapter setup timing
+- Dependency engine integration
+
 ## Module Extension System
 
 Create custom modules to extend functionality:
@@ -234,6 +325,7 @@ setting.options     # => {type: :column, default: false, ...}
 
 ## Related Documentation
 
+- [Settings Compilation](#settings-compilation) - Wave-based compilation for nested settings
 - [Storage Adapters](adapters.md) - `type` and `storage` options
 - [Callbacks](callbacks.md) - Callback options
 - [Validation](validation.md) - `validate_with` option

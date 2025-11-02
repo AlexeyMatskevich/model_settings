@@ -58,6 +58,20 @@ module ModelSettings
       before_save :apply_setting_cascades_and_syncs if respond_to?(:before_save)
     end
 
+    # Override initialize to compile settings before Rails assigns attributes
+    #
+    # This is critical because ActiveRecord's initialize assigns attributes
+    # before after_initialize callbacks run, so we need adapters set up earlier.
+    #
+    # @param args [Array] Arguments passed to ActiveRecord initialize
+    # @param block [Proc] Optional block passed to initialize
+    def initialize(*args, &block)
+      # Compile settings BEFORE calling super to ensure adapter methods exist
+      # when ActiveRecord tries to assign attributes in the constructor
+      self.class.compile_settings!
+      super
+    end
+
     # Auto-include default modules from configuration
     #
     # This method is called during DSL inclusion to automatically include
@@ -220,6 +234,12 @@ module ModelSettings
         # Execute definition hooks
         ModelSettings::ModuleRegistry.execute_definition_hooks(setting_obj, self)
 
+        # Validate storage configuration early (before deferred adapter setup)
+        # This ensures configuration errors are caught during class definition
+        if setting_obj.needs_own_adapter?
+          validate_storage_configuration(setting_obj)
+        end
+
         # Process nested settings if block given
         if block_given?
           previous_context = @_current_setting_context
@@ -228,12 +248,8 @@ module ModelSettings
           @_current_setting_context = previous_context
         end
 
-        # Setup storage adapter if setting needs own storage
-        # (root settings, column types, or JSON/StoreModel with explicit storage)
-        if setting_obj.needs_own_adapter?
-          adapter = create_adapter_for(setting_obj)
-          adapter.setup!
-        end
+        # Note: Adapter setup is deferred to compile_settings! for wave-based compilation
+        # This allows child settings to access parent settings during validation
 
         setting_obj
       end
@@ -265,6 +281,7 @@ module ModelSettings
       #
       # @return [Array<Setting>] Array of Setting objects
       def settings
+        compile_settings! # Ensure settings are compiled before access
         _settings
       end
 
@@ -280,6 +297,8 @@ module ModelSettings
       #   User.find_setting([:features, :ai_enabled])
       #
       def find_setting(name_or_path)
+        compile_settings! # Ensure settings are compiled before access
+
         if name_or_path.is_a?(Array)
           # Path to nested setting
           path = name_or_path
@@ -323,11 +342,35 @@ module ModelSettings
       #
       # This method should be called after all settings are defined
       # (typically happens automatically when the class is loaded).
-      # It runs compilation hooks and marks settings as compiled.
+      # It processes settings in waves by nesting level, runs compilation
+      # hooks, and marks settings as compiled.
+      #
+      # Wave-based compilation ensures parent settings are fully set up
+      # before their children are processed, enabling proper inheritance
+      # and dependency resolution.
       #
       # @return [void]
       def compile_settings!
         return if _settings_compiled
+
+        # Group settings by depth (nesting level)
+        settings_by_level = group_settings_by_depth
+
+        # Process settings in waves: Level 0 → Level 1 → Level 2 → ...
+        max_level = settings_by_level.keys.max || 0
+
+        (0..max_level).each do |level|
+          settings_at_level = settings_by_level[level] || []
+
+          # Process each setting in definition order within the level
+          settings_at_level.each do |setting|
+            # Setup adapter if this setting needs its own storage
+            if setting.needs_own_adapter?
+              adapter = create_adapter_for(setting)
+              adapter.setup!
+            end
+          end
+        end
 
         # Execute compilation hooks
         ModelSettings::ModuleRegistry.execute_compilation_hooks(all_settings_recursive, self)
@@ -567,6 +610,104 @@ module ModelSettings
           settings.select(&filter)
         else
           settings
+        end
+      end
+
+      # Group all settings by their nesting depth level
+      #
+      # Returns a hash where keys are depth levels (0, 1, 2, ...)
+      # and values are arrays of settings at that level, in definition order.
+      #
+      # @return [Hash{Integer => Array<Setting>}] Settings grouped by depth
+      #
+      # @example
+      #   # Given:
+      #   setting :billing do              # Level 0
+      #     setting :invoices do           # Level 1
+      #       setting :tax_reports         # Level 2
+      #     end
+      #     setting :payments              # Level 1
+      #   end
+      #   setting :api_access              # Level 0
+      #
+      #   # Returns:
+      #   {
+      #     0 => [:billing, :api_access],
+      #     1 => [:invoices, :payments],
+      #     2 => [:tax_reports]
+      #   }
+      def group_settings_by_depth
+        settings_by_level = Hash.new { |h, k| h[k] = [] }
+
+        all_settings_recursive.each do |setting|
+          level = calculate_depth(setting)
+          settings_by_level[level] << setting
+        end
+
+        settings_by_level
+      end
+
+      # Calculate the nesting depth of a setting
+      #
+      # Depth is determined by counting ancestors:
+      # - Root settings have depth 0
+      # - Direct children have depth 1
+      # - Grandchildren have depth 2, etc.
+      #
+      # @param setting [Setting] The setting to calculate depth for
+      # @return [Integer] The nesting depth (0 for root settings)
+      #
+      # @example
+      #   calculate_depth(root_setting)    # => 0
+      #   calculate_depth(child_setting)   # => 1
+      #   calculate_depth(grandchild)      # => 2
+      def calculate_depth(setting)
+        depth = 0
+        current = setting.parent
+        while current
+          depth += 1
+          current = current.parent
+        end
+        depth
+      end
+
+      # Validate storage configuration for JSON and StoreModel adapters
+      #
+      # This validates storage config and type early during class definition,
+      # before adapter setup is deferred to compile_settings!
+      #
+      # @param setting [Setting] The setting to validate
+      # @raise [ArgumentError] If storage configuration or type is invalid
+      def validate_storage_configuration(setting)
+        # Validate storage type is recognized
+        unless [:column, :json, :store_model].include?(setting.type)
+          raise ArgumentError, ErrorMessages.unknown_storage_type_error(
+            setting.type,
+            setting,
+            self
+          )
+        end
+
+        # Validate storage configuration for adapters that require it
+        case setting.type
+        when :json
+          storage = setting.storage
+          unless storage.is_a?(Hash) && storage[:column]
+            raise ArgumentError, ErrorMessages.adapter_configuration_error(
+              :json,
+              setting,
+              self
+            )
+          end
+        when :store_model
+          storage = setting.storage
+          unless storage.is_a?(Hash) && storage[:column]
+            raise ArgumentError, ErrorMessages.adapter_configuration_error(
+              :store_model,
+              setting,
+              self
+            )
+          end
         end
       end
 
