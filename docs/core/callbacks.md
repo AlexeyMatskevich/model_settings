@@ -4,6 +4,8 @@ ModelSettings provides a comprehensive callback system for hooking into setting 
 
 ## Available Callbacks
 
+### Setting Change Callbacks
+
 | Callback | When It Runs | Use Case |
 |----------|--------------|----------|
 | `before_enable` | Before setting changes to `true` | Prepare resources |
@@ -16,6 +18,18 @@ ModelSettings provides a comprehensive callback system for hooking into setting 
 | `around_change` | **Wraps** any value change | Measure time, transactions |
 | `after_change` | After any value change | Sync to external services |
 | `after_change_commit` | After database commit | Send emails, queue jobs |
+
+### Lifecycle Callbacks
+
+| Callback | When It Runs | Use Case |
+|----------|--------------|----------|
+| `before_validation` | Before model validation | Check prerequisites |
+| `after_validation` | After model validation | Log validation results |
+| `before_destroy` | Before model destruction | Check dependencies, cleanup |
+| `after_destroy` | After model destruction | Cascade deletions, notifications |
+| `after_change_rollback` | After transaction rollback | Cleanup temporary resources |
+
+**Note**: Lifecycle callbacks integrate with Rails model lifecycle. See [Lifecycle Callbacks](#lifecycle-callbacks) below.
 
 ## Basic Usage
 
@@ -344,6 +358,135 @@ user.premium = true
 user.save!  # Transaction commits, THEN card is charged
 ```
 
+## Lifecycle Callbacks
+
+ModelSettings integrates with Rails model lifecycle, providing callbacks that run during validation, destruction, and transaction rollback.
+
+### Validation Callbacks
+
+Run callbacks during model validation:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :api_access,
+          type: :column,
+          before_validation: :check_api_quota,
+          after_validation: :log_validation_result
+
+  private
+
+  def check_api_quota
+    return unless api_access_changed?
+
+    if api_access && api_calls_today >= daily_quota
+      errors.add(:api_access, "daily quota exceeded")
+    end
+  end
+
+  def log_validation_result
+    return unless api_access_changed?
+
+    Rails.logger.info "API access validation: #{errors[:api_access].empty? ? 'passed' : 'failed'}"
+  end
+end
+```
+
+### Destroy Callbacks
+
+Run callbacks when the model is destroyed:
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :active,
+          type: :column,
+          before_destroy: :check_active_users,
+          after_destroy: :notify_deactivation
+
+  private
+
+  def check_active_users
+    if active && users.active.any?
+      errors.add(:base, "Cannot delete organization with active users")
+      throw :abort  # Prevent destruction
+    end
+  end
+
+  def notify_deactivation
+    AdminMailer.organization_deleted(self).deliver_later
+  end
+end
+```
+
+#### Prepending Destroy Callbacks
+
+Use `:prepend` to run callbacks before others:
+
+```ruby
+setting :critical_data,
+        type: :column,
+        before_destroy: :backup_critical_data,
+        prepend: true  # Runs FIRST, before other callbacks
+
+setting :other_data,
+        type: :column,
+        before_destroy: :cleanup_other  # Runs after
+```
+
+### Rollback Callbacks
+
+Run callbacks when a transaction rolls back:
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :trial_mode,
+          type: :column,
+          after_change: :reserve_trial_resources,
+          after_change_rollback: :release_trial_resources
+
+  private
+
+  def reserve_trial_resources
+    @trial_resources = TrialResourcePool.reserve_for(self)
+  end
+
+  def release_trial_resources
+    # Transaction rolled back - release reserved resources
+    @trial_resources&.release!
+  end
+end
+
+# Usage
+ActiveRecord::Base.transaction do
+  user.trial_mode = true
+  user.save!
+
+  raise "Some error"  # Transaction rolls back
+end
+# release_trial_resources is called automatically
+```
+
+### Lifecycle Phase Filtering
+
+Use `:on` option to run callbacks only during specific phases:
+
+```ruby
+setting :status,
+        type: :column,
+        after_change: :send_notification,
+        on: :create  # Only on record creation
+
+setting :active,
+        type: :column,
+        before_validation: :check_dependencies,
+        on: [:create, :update]  # Not on destroy
+```
+
 ## Callback Arguments
 
 Callbacks receive no arguments. Access the instance via `self`:
@@ -355,9 +498,102 @@ def notify_premium_activation
 end
 ```
 
-## Conditional Callbacks
+## Callback Options
 
-Run callbacks only when certain conditions are met:
+Callbacks support Rails-style options for conditional execution and ordering.
+
+### :if Option
+
+Run callback only if condition is true:
+
+```ruby
+setting :premium,
+        type: :column,
+        after_enable: :send_welcome_email,
+        if: :email_notifications_enabled?
+
+private
+
+def email_notifications_enabled?
+  email_verified? && !unsubscribed?
+end
+```
+
+### :unless Option
+
+Run callback only if condition is false:
+
+```ruby
+setting :api_access,
+        type: :column,
+        after_enable: :notify_admin,
+        unless: :internal_user?
+
+private
+
+def internal_user?
+  email.ends_with?('@company.com')
+end
+```
+
+### :on Option
+
+Run callback only during specific lifecycle phases:
+
+```ruby
+setting :feature,
+        type: :column,
+        after_enable: :send_notification,
+        on: :create  # Only on record creation
+
+# Options: :create, :update, :destroy
+```
+
+Multiple phases:
+
+```ruby
+setting :status,
+        type: :column,
+        after_change: :log_change,
+        on: [:create, :update]  # Not on destroy
+```
+
+### :prepend Option
+
+Run callback before others (only for `before_destroy`):
+
+```ruby
+setting :important,
+        type: :column,
+        before_destroy: :critical_cleanup,
+        prepend: true  # Runs first
+
+setting :other,
+        type: :column,
+        before_destroy: :normal_cleanup  # Runs after
+```
+
+### Combining Options
+
+Multiple options can be combined:
+
+```ruby
+setting :premium,
+        type: :column,
+        after_enable: :notify_sales_team,
+        if: :high_value_customer?,
+        on: :update  # Only notify on updates, not creation
+
+private
+
+def high_value_customer?
+  total_purchases > 10_000
+end
+```
+
+## Conditional Callbacks (Manual)
+
+For more complex conditions, use conditional logic inside the callback method:
 
 ```ruby
 class User < ApplicationRecord
