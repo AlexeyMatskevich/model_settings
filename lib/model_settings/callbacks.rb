@@ -32,14 +32,18 @@ module ModelSettings
     # Execute callbacks for a setting change
     #
     # @param setting [Setting] The setting object
-    # @param action [Symbol] The action (:enable, :disable, :toggle, :change)
+    # @param action [Symbol] The action (:enable, :disable, :toggle, :change, :validation, :destroy, :change_rollback)
     # @param timing [Symbol] When to run (:before, :after)
+    # @param phase [Symbol, nil] Lifecycle phase (:create, :update, :destroy) for :on option
     # @return [Boolean] true if all callbacks succeeded
-    def execute_setting_callbacks(setting, action, timing)
+    def execute_setting_callbacks(setting, action, timing, phase: nil)
       callback_name = :"#{timing}_#{action}"
       callback = setting.options[callback_name]
 
       return true unless callback
+
+      # Check callback conditions (:if, :unless, :on)
+      return true unless should_execute_callback?(setting, phase)
 
       case callback
       when Symbol
@@ -161,6 +165,35 @@ module ModelSettings
       rescue => e
         Rails.logger.error("Setting after_change_commit callback failed: #{e.message}") if defined?(Rails)
       end
+    end
+
+    private
+
+    # Check if callback should be executed based on conditions
+    #
+    # @param setting [Setting] The setting object
+    # @param phase [Symbol, nil] Current lifecycle phase
+    # @return [Boolean] true if callback should execute
+    def should_execute_callback?(setting, phase)
+      # Check :if condition
+      if setting.options[:if]
+        condition_method = setting.options[:if]
+        return false unless public_send(condition_method)
+      end
+
+      # Check :unless condition
+      if setting.options[:unless]
+        condition_method = setting.options[:unless]
+        return false if public_send(condition_method)
+      end
+
+      # Check :on lifecycle phase
+      if setting.options[:on] && phase
+        required_phase = setting.options[:on]
+        return false unless phase == required_phase
+      end
+
+      true
     end
 
     module ClassMethods

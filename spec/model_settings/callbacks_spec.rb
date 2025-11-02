@@ -22,6 +22,7 @@ RSpec.describe ModelSettings::Callbacks do
   describe "#execute_setting_callbacks" do
     let(:setting) { model_class.find_setting(:enabled) }
 
+    # Tests for basic callback mechanism (Symbol, Proc, Array)
     context "when callback is Symbol" do
       before do
         model_class.class_eval do
@@ -63,15 +64,11 @@ RSpec.describe ModelSettings::Callbacks do
         end
       end
 
-      # rubocop:disable RSpecGuide/ContextSetup
-      context "but with access to instance variables" do  # Organizational/characteristic context
-        # rubocop:enable RSpecGuide/ContextSetup
-        it "can access instance variables" do
-          instance.instance_variable_set(:@test_var, "test")
-          setting.options[:after_enable] = -> { @test_var }  # rubocop:disable RSpec/InstanceVariable
+      it "can access instance variables in Proc callbacks" do
+        instance.instance_variable_set(:@test_var, "test")
+        setting.options[:after_enable] = -> { @test_var }  # rubocop:disable RSpec/InstanceVariable
 
-          expect(instance.execute_setting_callbacks(setting, :enable, :after)).to be true
-        end
+        expect(instance.execute_setting_callbacks(setting, :enable, :after)).to be true
       end
     end
 
@@ -104,9 +101,10 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when callback is nil" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
+    context "when callback is nil" do
+      before {} # rubocop:disable RSpec/EmptyHook
+      # Edge case: testing fallback when no callback defined
+
       it "returns true" do
         expect(instance.execute_setting_callbacks(setting, :enable, :before)).to be true
       end
@@ -166,6 +164,320 @@ RSpec.describe ModelSettings::Callbacks do
         end
       end
     end
+
+    # Tests for validation callbacks
+    context "with validation callbacks" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "ValidationCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :validation_log
+
+          setting :premium,
+            type: :column,
+            default: false,
+            before_validation: :log_before_validation,
+            after_validation: :log_after_validation
+
+          def log_before_validation
+            self.validation_log ||= []
+            self.validation_log << :before
+          end
+
+          def log_after_validation
+            self.validation_log ||= []
+            self.validation_log << :after
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:premium) }
+
+      it "executes before_validation callback" do
+        instance.execute_setting_callbacks(setting, :validation, :before)
+
+        expect(instance.validation_log).to eq([:before])
+      end
+
+      it "executes after_validation callback" do
+        instance.execute_setting_callbacks(setting, :validation, :after)
+
+        expect(instance.validation_log).to eq([:after])
+      end
+
+      it "executes both callbacks in correct order" do
+        instance.execute_setting_callbacks(setting, :validation, :before)
+        instance.execute_setting_callbacks(setting, :validation, :after)
+
+        expect(instance.validation_log).to eq([:before, :after])
+      end
+    end
+
+    # Tests for destroy callbacks
+    context "with destroy callbacks" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "DestroyCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :destroy_log
+
+          setting :feature,
+            type: :column,
+            default: true,
+            before_destroy: :log_before_destroy,
+            after_destroy: :log_after_destroy
+
+          def log_before_destroy
+            self.destroy_log ||= []
+            self.destroy_log << :before
+          end
+
+          def log_after_destroy
+            self.destroy_log ||= []
+            self.destroy_log << :after
+          end
+        end
+      end
+
+      let(:instance) { model_class.create! }
+      let(:setting) { model_class.find_setting(:feature) }
+
+      it "executes before_destroy callback" do
+        instance.execute_setting_callbacks(setting, :destroy, :before)
+
+        expect(instance.destroy_log).to eq([:before])
+      end
+
+      it "executes after_destroy callback" do
+        instance.execute_setting_callbacks(setting, :destroy, :after)
+
+        expect(instance.destroy_log).to eq([:after])
+      end
+    end
+
+    # Tests for rollback callback
+    context "with rollback callback" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "RollbackCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :rollback_fired
+
+          setting :enabled,
+            type: :column,
+            default: false,
+            after_change_rollback: :handle_rollback
+
+          def handle_rollback
+            self.rollback_fired = true
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:enabled) }
+
+      it "executes after_change_rollback callback" do
+        instance.execute_setting_callbacks(setting, :change_rollback, :after)
+
+        expect(instance.rollback_fired).to be true
+      end
+    end
+
+    # Tests for conditional execution (:if, :unless, :on, :prepend options)
+    context "with :if condition" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "ConditionalCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :callback_executed, :condition_met
+
+          setting :feature,
+            type: :column,
+            default: false,
+            before_enable: :conditional_callback,
+            if: :condition_met?
+
+          def conditional_callback
+            self.callback_executed = true
+          end
+
+          def condition_met?
+            condition_met == true
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:feature) }
+
+      context "when condition is true" do
+        before { instance.condition_met = true }
+
+        it "executes callback" do
+          instance.execute_setting_callbacks(setting, :enable, :before)
+
+          expect(instance.callback_executed).to be true
+        end
+      end
+
+      context "when condition is false" do
+        before { instance.condition_met = false }
+
+        it "does not execute callback" do
+          instance.execute_setting_callbacks(setting, :enable, :before)
+
+          expect(instance.callback_executed).to be_nil
+        end
+      end
+    end
+
+    context "with :unless condition" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "UnlessCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :callback_executed, :skip_callback
+
+          setting :notification,
+            type: :column,
+            default: true,
+            after_disable: :notify_change,
+            unless: :skip_callback?
+
+          def notify_change
+            self.callback_executed = true
+          end
+
+          def skip_callback?
+            skip_callback == true
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:notification) }
+
+      context "when condition is false" do
+        before { instance.skip_callback = false }
+
+        it "executes callback" do
+          instance.execute_setting_callbacks(setting, :disable, :after)
+
+          expect(instance.callback_executed).to be true
+        end
+      end
+
+      context "when condition is true" do
+        before { instance.skip_callback = true }
+
+        it "does not execute callback" do
+          instance.execute_setting_callbacks(setting, :disable, :after)
+
+          expect(instance.callback_executed).to be_nil
+        end
+      end
+    end
+
+    context "with :on lifecycle phase" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "OnOptionCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :callback_log
+
+          setting :audit_enabled,
+            type: :column,
+            default: false,
+            before_enable: :log_create,
+            on: :create
+
+          def log_create
+            self.callback_log ||= []
+            self.callback_log << :create
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:audit_enabled) }
+
+      it "executes callback when lifecycle phase matches" do
+        instance.execute_setting_callbacks(setting, :enable, :before, phase: :create)
+
+        expect(instance.callback_log).to eq([:create])
+      end
+
+      it "does not execute callback when lifecycle phase does not match" do
+        instance.execute_setting_callbacks(setting, :enable, :before, phase: :update)
+
+        expect(instance.callback_log).to be_nil
+      end
+    end
+
+    context "with :prepend option for before_destroy" do
+      let(:model_class) do
+        Class.new(TestModel) do
+          def self.name
+            "PrependCallbackModel"
+          end
+
+          include ModelSettings::DSL
+
+          attr_accessor :callback_order
+
+          setting :enabled,
+            type: :column,
+            default: true,
+            before_destroy: [:cleanup_first, :cleanup_second],
+            prepend: true
+
+          def cleanup_first
+            self.callback_order ||= []
+            self.callback_order << :first
+          end
+
+          def cleanup_second
+            self.callback_order ||= []
+            self.callback_order << :second
+          end
+        end
+      end
+
+      let(:instance) { model_class.new }
+      let(:setting) { model_class.find_setting(:enabled) }
+
+      it "prepends callbacks to execution order" do
+        instance.execute_setting_callbacks(setting, :destroy, :before)
+
+        expect(instance.callback_order).to eq([:first, :second])
+      end
+    end
   end
 
   describe "#track_setting_change_for_commit" do
@@ -182,16 +494,12 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "but when adding duplicate settings" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
-      it "does NOT add duplicate entries" do
-        instance.track_setting_change_for_commit(setting)
-        instance.track_setting_change_for_commit(setting)
+    it "does NOT add duplicate entries when adding same setting twice" do
+      instance.track_setting_change_for_commit(setting)
+      instance.track_setting_change_for_commit(setting)
 
-        pending_count = instance.instance_variable_get(:@_pending_setting_callbacks)&.size
-        expect(pending_count).to eq(1)
-      end
+      pending_count = instance.instance_variable_get(:@_pending_setting_callbacks)&.size
+      expect(pending_count).to eq(1)
     end
   end
 
@@ -206,9 +514,10 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when no pending callbacks" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
+    context "when no pending callbacks" do
+      before {} # rubocop:disable RSpec/EmptyHook
+      # Edge case: testing default state (empty array)
+
       it "returns false" do
         expect(instance.has_pending_setting_callbacks?).to be false
       end
@@ -218,107 +527,104 @@ RSpec.describe ModelSettings::Callbacks do
   describe "#run_pending_setting_callbacks" do
     let(:setting) { model_class.find_setting(:enabled) }
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when pending callbacks exist" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
-      context "with after_change_commit as Symbol" do
-        before do
-          model_class.class_eval do
-            attr_accessor :commit_callback_executed
+    context "with after_change_commit as Symbol" do
+      before do
+        model_class.class_eval do
+          attr_accessor :commit_callback_executed
 
-            def my_commit_callback
-              self.commit_callback_executed = true
-            end
-          end
-
-          setting.options[:after_change_commit] = :my_commit_callback
-          instance.track_setting_change_for_commit(setting)
-        end
-
-        it "calls instance method and clears pending callbacks" do
-          instance.run_pending_setting_callbacks
-
-          aggregate_failures do
-            expect(instance.commit_callback_executed).to be true
-            expect(instance.has_pending_setting_callbacks?).to be false
+          def my_commit_callback
+            self.commit_callback_executed = true
           end
         end
+
+        setting.options[:after_change_commit] = :my_commit_callback
+        instance.track_setting_change_for_commit(setting)
       end
 
-      context "with after_change_commit as Proc" do
-        before do
-          model_class.class_eval do
-            attr_accessor :proc_result
-          end
+      it "calls instance method and clears pending callbacks" do
+        instance.run_pending_setting_callbacks
 
-          setting.options[:after_change_commit] = -> { self.proc_result = "committed" }
-          instance.track_setting_change_for_commit(setting)
-        end
-
-        it "executes proc and clears pending callbacks" do
-          instance.run_pending_setting_callbacks
-
-          aggregate_failures do
-            expect(instance.proc_result).to eq("committed")
-            expect(instance.has_pending_setting_callbacks?).to be false
-          end
-        end
-      end
-
-      context "with after_change_commit as Array" do
-        before do
-          model_class.class_eval do
-            attr_accessor :callback_log
-
-            def commit_one
-              self.callback_log ||= []
-              self.callback_log << :commit_one
-            end
-
-            def commit_two
-              self.callback_log ||= []
-              self.callback_log << :commit_two
-            end
-          end
-
-          setting.options[:after_change_commit] = [:commit_one, :commit_two]
-          instance.track_setting_change_for_commit(setting)
-        end
-
-        it "calls all callbacks in order and clears pending callbacks" do
-          instance.run_pending_setting_callbacks
-
-          aggregate_failures do
-            expect(instance.callback_log).to eq([:commit_one, :commit_two])
-            expect(instance.has_pending_setting_callbacks?).to be false
-          end
-        end
-      end
-
-      context "but when callback raises error" do
-        before do
-          model_class.class_eval do
-            def failing_commit_callback
-              raise StandardError, "commit callback failed"
-            end
-          end
-
-          setting.options[:after_change_commit] = :failing_commit_callback
-          instance.track_setting_change_for_commit(setting)
-        end
-
-        it "does NOT raise exception and still clears pending callbacks" do
-          aggregate_failures do
-            expect { instance.run_pending_setting_callbacks }.not_to raise_error
-            expect(instance.has_pending_setting_callbacks?).to be false
-          end
+        aggregate_failures do
+          expect(instance.commit_callback_executed).to be true
+          expect(instance.has_pending_setting_callbacks?).to be false
         end
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when no pending callbacks" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
+    context "with after_change_commit as Proc" do
+      before do
+        model_class.class_eval do
+          attr_accessor :proc_result
+        end
+
+        setting.options[:after_change_commit] = -> { self.proc_result = "committed" }
+        instance.track_setting_change_for_commit(setting)
+      end
+
+      it "executes proc and clears pending callbacks" do
+        instance.run_pending_setting_callbacks
+
+        aggregate_failures do
+          expect(instance.proc_result).to eq("committed")
+          expect(instance.has_pending_setting_callbacks?).to be false
+        end
+      end
+    end
+
+    context "with after_change_commit as Array" do
+      before do
+        model_class.class_eval do
+          attr_accessor :callback_log
+
+          def commit_one
+            self.callback_log ||= []
+            self.callback_log << :commit_one
+          end
+
+          def commit_two
+            self.callback_log ||= []
+            self.callback_log << :commit_two
+          end
+        end
+
+        setting.options[:after_change_commit] = [:commit_one, :commit_two]
+        instance.track_setting_change_for_commit(setting)
+      end
+
+      it "calls all callbacks in order and clears pending callbacks" do
+        instance.run_pending_setting_callbacks
+
+        aggregate_failures do
+          expect(instance.callback_log).to eq([:commit_one, :commit_two])
+          expect(instance.has_pending_setting_callbacks?).to be false
+        end
+      end
+    end
+
+    context "but when callback raises error" do
+      before do
+        model_class.class_eval do
+          def failing_commit_callback
+            raise StandardError, "commit callback failed"
+          end
+        end
+
+        setting.options[:after_change_commit] = :failing_commit_callback
+        instance.track_setting_change_for_commit(setting)
+      end
+
+      it "does NOT raise exception and still clears pending callbacks" do
+        aggregate_failures do
+          expect { instance.run_pending_setting_callbacks }.not_to raise_error
+          expect(instance.has_pending_setting_callbacks?).to be false
+        end
+      end
+    end
+
+    context "when no pending callbacks" do
+      before {} # rubocop:disable RSpec/EmptyHook
+      # Edge case: testing no-op behavior (empty array)
+
       it "does nothing" do
         expect { instance.run_pending_setting_callbacks }.not_to raise_error
       end
@@ -396,9 +702,10 @@ RSpec.describe ModelSettings::Callbacks do
       end
     end
 
-    # rubocop:disable RSpecGuide/ContextSetup
-    context "when no around callback is defined" do  # Organizational/characteristic context
-      # rubocop:enable RSpecGuide/ContextSetup
+    context "when no around callback is defined" do
+      before {} # rubocop:disable RSpec/EmptyHook
+      # Edge case: testing direct execution fallback (no callback)
+
       it "executes the operation directly" do
         executed = false
         instance.execute_around_callback(setting, :enable) do
