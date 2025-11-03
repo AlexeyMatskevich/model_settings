@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-11-03
+
 ### Added
 - **Test Coverage Improvements** (Phase 1 Critical Gaps): Comprehensive tests for previously untested components
   - **BooleanValueValidator**: 19 unit tests for strict boolean validation (rejects type coercion, validates true/false/nil)
