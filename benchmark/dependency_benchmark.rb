@@ -23,7 +23,15 @@ cascade_model = create_test_model("cascade") do
 end
 
 cascade_model.compile_settings!
-cascade_instance = cascade_model.create!
+cascade_instance = cascade_model.new(
+  level_0: false,
+  level_1: false,
+  level_2: false,
+  level_3: false,
+  level_4: false,
+  level_5: false
+)
+cascade_instance.save!(validate: false)
 
 puts "Testing cascade with 5 levels deep"
 puts ""
@@ -72,7 +80,15 @@ sync_model = create_test_model("sync") do
 end
 
 sync_model.compile_settings!
-sync_instance = sync_model.create!
+sync_instance = sync_model.new(
+  source: false,
+  target_1: false,
+  target_2: false,
+  target_3: false,
+  target_4: false,
+  target_5: false
+)
+sync_instance.save!(validate: false)
 
 puts "Testing sync chain with 5 settings"
 puts ""

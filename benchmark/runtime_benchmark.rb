@@ -14,16 +14,23 @@ model_class = create_test_model("runtime") do
   setting :feature_3, type: :column, default: false
 
   setting :prefs, type: :json, storage: {column: :prefs_json} do
-    setting :theme, default: "light"
-    setting :notifications, default: true
-    setting :language, default: "en"
+    setting :ui_theme, default: "light"
+    setting :email_notifications, default: true
+    setting :ui_language, default: "en"
   end
 end
 
 model_class.compile_settings!
 
 # Create test instance
-instance = model_class.create!
+instance = model_class.new
+instance.feature_1 = false
+instance.feature_2 = false
+instance.feature_3 = false
+instance.ui_theme = "light"
+instance.email_notifications = true
+instance.ui_language = "en"
+instance.save!(validate: false)
 
 puts "Testing with instance: #{instance.class.name}"
 puts ""
@@ -52,11 +59,11 @@ Benchmark.ips do |x|
   end
 
   x.report("read JSON setting") do
-    instance.theme
+    instance.ui_theme
   end
 
   x.report("write JSON setting") do
-    instance.theme = "dark"
+    instance.ui_theme = "dark"
   end
 
   x.compare!

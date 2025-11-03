@@ -81,17 +81,22 @@ RSpec.describe ModelSettings::DeprecationAuditor do
     end
 
     # Edge case - deprecated settings exist but not used
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when deprecated settings exist but are not used" do
-      let(:records_count) { 0 }  # Explicit "no records" marker
+      # rubocop:enable RSpecGuide/ContextSetup
+      # No records created - testing zero usage scenario
 
-      before { records_count.times { model_class.create! } }
-
-      it "returns report with zero usage", :aggregate_failures do
+      it "returns report with zero usage" do
         report = auditor.generate_report
 
         expect(report).to have_attributes(
           has_active_usage?: false
         )
+      end
+
+      it "formats success message" do
+        report = auditor.generate_report
+
         expect(report.to_s).to eq("✓ No deprecated settings found in use")
       end
     end
@@ -202,10 +207,10 @@ RSpec.describe ModelSettings::DeprecationAuditor do
     end
 
     # Edge case - no deprecated settings in use
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when no deprecated settings in use" do
-      let(:model_reports) { [] }  # Explicit "empty reports" marker
-
-      before { model_reports.each { |mr| report.add_model_report(*mr) } }
+      # rubocop:enable RSpecGuide/ContextSetup
+      # No model reports added - testing empty state
 
       it "returns success message" do
         expect(report.to_s).to eq("✓ No deprecated settings found in use")
@@ -316,6 +321,8 @@ RSpec.describe ModelSettings::DeprecationAuditor do
     # rubocop:disable RSpecGuide/ContextSetup
     context "when Rails is defined" do
       # rubocop:enable RSpecGuide/ContextSetup
+      # Rails constant is defined by default in test environment
+
       it "returns models that include ModelSettings::DSL" do
         models = auditor.send(:find_models_with_settings)
 
@@ -326,16 +333,20 @@ RSpec.describe ModelSettings::DeprecationAuditor do
     # rubocop:disable RSpecGuide/ContextSetup
     context "but when Rails is not defined" do
       # rubocop:enable RSpecGuide/ContextSetup
-      it "returns empty array" do
-        # Temporarily hide Rails constant
+      around do |example|
+        # Temporarily remove Rails constant
         rails_const = Object.send(:remove_const, :Rails) if defined?(Rails)
 
-        begin
-          models = auditor.send(:find_models_with_settings)
-          expect(models).to eq([])
-        ensure
-          Object.const_set(:Rails, rails_const) if rails_const
-        end
+        example.run
+
+        # Restore Rails constant
+        Object.const_set(:Rails, rails_const) if rails_const
+      end
+
+      it "returns empty array" do
+        models = auditor.send(:find_models_with_settings)
+
+        expect(models).to eq([])
       end
     end
   end

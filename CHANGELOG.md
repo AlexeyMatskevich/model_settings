@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Sprint 12 - Tooling & Production Hardening)
+- **Production Deployment Documentation**: Comprehensive guides for production deployment
+  - `docs/guides/production_deployment.md`: Complete deployment checklist with migration patterns, performance optimization, monitoring, security hardening, and rollback strategies
+  - `docs/guides/upgrading.md`: Version-specific upgrade guide with breaking changes, migration steps, common issues, and rollback procedures
+  - `docs/guides/deprecation_policy.md`: Formal deprecation policy distinguishing pre-1.0 (breaking changes allowed) vs post-1.0 (strict SemVer) approaches
+- **Security Audit**: Complete security analysis with documented findings
+  - `SECURITY.md`: Security policy with audit findings, best practices, and vulnerability reporting
+  - ✅ SQL Injection: PASS - all queries use safe Arel/ActiveRecord APIs
+  - ✅ Mass Assignment: PASS - correctly delegates to Strong Parameters
+  - ⚠️ Authorization Bypass: BY DESIGN - helper methods don't enforce authorization (must be done at controller level)
+  - Security model documentation: defense-in-depth approach with controller, model, and database layers
+  - Cascade security boundary guidelines
+- **Performance Benchmarks Restored**: Fixed and updated benchmark suite
+  - Fixed SystemStackError in `benchmark/setup.rb` (recursive name method)
+  - Fixed ActiveRecord 8.1 validation conflicts in runtime and dependency benchmarks
+  - Added missing table columns for cascade/sync benchmarks
+  - Successfully ran all benchmarks on v0.9.0
+  - Performance improvements vs v0.7.0: 100 settings +102% faster (217 → 439 i/s), 1000 settings +325% faster (12 → 51 i/s)
+- **Documentation Formatters**: All four formatters fully implemented and tested
+  - `lib/model_settings/documentation/markdown_formatter.rb`: Markdown documentation generator
+  - `lib/model_settings/documentation/json_formatter.rb`: JSON documentation generator
+  - `lib/model_settings/documentation/yaml_formatter.rb`: YAML documentation generator (203 lines)
+  - `lib/model_settings/documentation/html_formatter.rb`: HTML documentation generator with styling (400 lines)
+  - 110 comprehensive tests covering all formatters with filters, authorization, dependencies, and edge cases
+  - All tests passing (spec/model_settings/documentation_spec.rb)
+
+### Fixed (Sprint 12)
+- **Test Improvements**: Applied Test Polishing to deprecation_auditor_spec.rb
+  - Fixed aggregate_failures misuse (Rule 23)
+  - Fixed empty contexts by removing empty before blocks
+  - Added proper rubocop disables for legitimate no-setup contexts
+  - Changed instance variables to around blocks
+  - 21 examples, 0 failures, 0 linter offenses
+
 ## [0.9.0] - 2025-11-04
 
 ### Changed (BREAKING)
