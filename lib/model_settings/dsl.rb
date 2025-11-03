@@ -273,10 +273,14 @@ module ModelSettings
         # Execute definition hooks
         ModelSettings::ModuleRegistry.execute_definition_hooks(setting_obj, self)
 
-        # Validate storage configuration early (before deferred adapter setup)
-        # This ensures configuration errors are caught during class definition
+        # Validate storage configuration based on validation_mode:
+        # - :strict mode: Validate immediately (fail fast)
+        # - :collect mode: Defer to compile_settings! (collect all errors)
         if setting_obj.needs_own_adapter?
-          validate_storage_configuration(setting_obj)
+          if ModelSettings.configuration.validation_mode == :strict
+            validate_storage_configuration(setting_obj)
+          end
+          # In :collect mode, validation happens during compile_settings!
         end
 
         # Process nested settings if block given
@@ -391,6 +395,9 @@ module ModelSettings
       # @return [void]
       def compile_settings!
         return if _settings_compiled
+
+        # Validate settings configuration before compilation
+        validate_settings_configuration!
 
         # Group settings by depth (nesting level)
         settings_by_level = group_settings_by_depth
@@ -823,6 +830,41 @@ module ModelSettings
           current = current.parent
         end
         depth
+      end
+
+      # Validate all settings configuration before compilation
+      #
+      # Validates storage configuration for all settings according to validation_mode:
+      # - :strict mode (default) - Fails on first validation error
+      # - :collect mode - Collects all validation errors and reports them together
+      #
+      # @raise [ArgumentError] If any setting has invalid configuration
+      def validate_settings_configuration!
+        validation_mode = ModelSettings.configuration.validation_mode
+
+        # Only validate settings that need their own adapter
+        # (nested JSON/StoreModel settings without storage don't need validation)
+        settings_to_validate = all_settings_recursive.select(&:needs_own_adapter?)
+
+        if validation_mode == :strict
+          # Strict mode: fail on first error (current behavior)
+          settings_to_validate.each do |setting|
+            validate_storage_configuration(setting)
+          end
+        else
+          # Collect mode: accumulate all errors
+          errors = []
+
+          settings_to_validate.each do |setting|
+            validate_storage_configuration(setting)
+          rescue ArgumentError => e
+            errors << "- #{setting.name}: #{e.message}"
+          end
+
+          if errors.any?
+            raise ArgumentError, "Found #{errors.size} validation error(s):\n#{errors.join("\n")}"
+          end
+        end
       end
 
       # Validate storage configuration for JSON and StoreModel adapters

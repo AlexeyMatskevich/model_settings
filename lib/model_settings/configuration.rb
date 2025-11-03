@@ -14,7 +14,7 @@ module ModelSettings
   #   end
   class Configuration
     attr_accessor :default_modules, :inherit_authorization, :inherit_settings
-    attr_reader :inheritable_options
+    attr_reader :inheritable_options, :validation_mode
 
     def initialize
       @default_modules = []
@@ -23,6 +23,26 @@ module ModelSettings
       @module_callbacks = {}
       @inheritable_options = []
       @inheritable_options_explicitly_set = false
+      @validation_mode = detect_validation_mode
+    end
+
+    # Set validation mode for error handling
+    #
+    # @param mode [Symbol] Validation mode:
+    #   - :strict (default) - Fail on first validation error (production)
+    #   - :collect - Collect all validation errors (development/test)
+    #
+    # @raise [ArgumentError] If mode is not :strict or :collect
+    #
+    # @example
+    #   config.validation_mode = :collect  # Show all errors
+    #   config.validation_mode = :strict   # Fail fast
+    #
+    def validation_mode=(mode)
+      unless [:strict, :collect].include?(mode)
+        raise ArgumentError, "Validation mode must be :strict or :collect, got: #{mode.inspect}"
+      end
+      @validation_mode = mode
     end
 
     # Configure callback for a specific module
@@ -135,6 +155,21 @@ module ModelSettings
       @module_callbacks = {}
       @inheritable_options = []
       @inheritable_options_explicitly_set = false
+      @validation_mode = detect_validation_mode
+    end
+
+    private
+
+    # Auto-detect validation mode based on Rails environment
+    #
+    # @return [Symbol] :collect for development/test, :strict for production/other
+    #
+    def detect_validation_mode
+      if defined?(Rails) && Rails.respond_to?(:env)
+        (Rails.env.development? || Rails.env.test?) ? :collect : :strict
+      else
+        :strict # Default to strict if Rails not available
+      end
     end
   end
 

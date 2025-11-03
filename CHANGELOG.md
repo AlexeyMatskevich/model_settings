@@ -130,20 +130,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated rake tasks to support FORMAT=yaml and FORMAT=html
   - 10 new comprehensive tests (110 total documentation examples)
 
+- **Validation Timing Configuration** (Phase 6): Configurable error reporting during settings compilation
+  - Two validation modes for different development contexts:
+    - `:strict` mode (default in production) - Fail fast on first validation error during setting definition
+    - `:collect` mode (default in development/test) - Collect all validation errors and report together during compilation
+  - `Configuration.validation_mode = :strict | :collect`: Set validation mode globally
+  - `Configuration.validation_mode`: Get current validation mode
+  - Auto-detection based on `Rails.env` (development/test → :collect, production → :strict)
+  - Validation deferred to `compile_settings!` in :collect mode for comprehensive error reporting
+  - Immediate validation during `setting()` in :strict mode for fast feedback
+  - Only validates settings that need their own adapter (skips nested JSON/StoreModel without storage)
+  - Aggregated error messages with setting names and detailed fix suggestions
+  - 27 comprehensive tests covering both modes, mode switching, and all adapter types
+  - Documentation in `docs/core/configuration.md` with examples and usage recommendations
+  - All 1353 tests passing (was 1356, -3 duplicate tests removed during test polishing)
+
 - **Test Quality Improvements**: Comprehensive test polishing across all uncommitted test files
-  - Applied Test Polishing Guidelines from implementation roadmap to 12 uncommitted test files
-  - **Files Fully Polished** (5 files with structural improvements):
+  - Applied Test Polishing Guidelines (3-step process) from implementation roadmap to 13 uncommitted test files
+  - **Files Fully Polished** (6 files with structural improvements):
     - boolean_value_validator_spec.rb: Removed 2 duplicate tests, restructured invalid values by type
     - simple_audit_spec.rb (766 lines, 38 tests): Restructured 3 blocks with logical grouping
     - module_callback_integration_spec.rb: Restructured all 3 blocks with nested describes
     - cross_adapter_validation_spec.rb: Fixed happy path ordering (valid before invalid)
     - merge_strategies_spec.rb: Reordered 2 blocks for happy path first
+    - validation_timing_spec.rb: Removed 3 duplicate tests, eliminated procedural begin/rescue patterns, applied "but when"/"and when" naming for proper test flow
   - **Files Verified Excellent** (7 files, no changes needed):
     - metadata_cascade_inheritance_spec.rb: Already perfectly structured
     - Phase 3 modified files (column/json/store_model/configuration/module_registry/roles/setting specs): All follow RSpec best practices
   - Applied consistent naming patterns: "but when..." (reverse cases), "and when..." (additional errors)
-  - 0 critical RSpec/NestedGroups violations across all 12 files
-  - **Final Test Suite**: 1326 examples, 0 failures, 6 pending (was 1341 after Phase 3, -15 from polishing adjustments)
+  - 0 critical RSpec/NestedGroups violations across all 13 files
+  - **Final Test Suite**: 1353 examples, 0 failures, 6 pending (was 1341 after Phase 3, +27 from Phase 6, -15 from polishing adjustments)
 
 ### Changed
 - **Module Reloading Documentation**: Added comprehensive comments explaining symbol-based module tracking

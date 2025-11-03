@@ -296,6 +296,105 @@ end
 
 **See Also:** [Module Development API](../guides/module_development.md#callback-configuration) for module developers
 
+### validation_mode
+
+Configure how validation errors are reported during settings compilation (Sprint 11 Phase 6).
+
+```ruby
+ModelSettings.configure do |config|
+  config.validation_mode = :collect  # Show all errors at once
+  # or
+  config.validation_mode = :strict   # Fail on first error (default in production)
+end
+```
+
+**Modes:**
+
+- **`:strict`** (default in production) - Fail on first validation error
+  - Settings are validated immediately when defined
+  - First error stops execution (fail fast)
+  - Best for production environments
+  - Provides quick feedback during development
+
+- **`:collect`** (default in development/test) - Collect all validation errors
+  - Validation is deferred until `compile_settings!`
+  - All errors are collected and reported together
+  - Best for development/test environments
+  - See all problems at once, not one at a time
+
+**Auto-Detection:**
+
+The validation mode is automatically detected based on `Rails.env`:
+- Development/Test → `:collect` (show all errors)
+- Production/Other → `:strict` (fail fast)
+
+**Manual Configuration:**
+
+Override auto-detection in your initializer:
+
+```ruby
+# config/initializers/model_settings.rb
+ModelSettings.configure do |config|
+  # Force collect mode in all environments (useful for CI)
+  config.validation_mode = :collect
+end
+```
+
+**Example - Strict Mode** (default in production):
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  setting :features, type: :json  # ← Error: Missing storage column
+  # ArgumentError raised immediately on line above
+end
+```
+
+**Example - Collect Mode** (default in development):
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  # These settings have errors, but no exception yet
+  setting :features, type: :json           # Missing storage
+  setting :config, type: :store_model      # Missing storage
+  setting :invalid, type: :unknown_type    # Unknown type
+end
+
+# Error raised during first model instantiation or explicit compile_settings!
+User.new
+# => ArgumentError: Found 3 validation error(s):
+#    - features: JSON adapter requires a storage column
+#    - config: StoreModel adapter requires a storage column
+#    - invalid: Unknown storage type: :unknown_type
+```
+
+**Benefits of Collect Mode:**
+
+1. **See All Problems** - Don't fix errors one at a time
+2. **Faster Development** - Less back-and-forth fixing individual errors
+3. **Better CI Output** - See all configuration issues in one test run
+4. **Comprehensive Feedback** - Understand full scope of configuration problems
+
+**When to Use Each Mode:**
+
+| Mode | Use Case |
+|------|----------|
+| **`:strict`** | Production, when you want fail-fast behavior |
+| **`:collect`** | Development/Test, when you want to see all errors at once |
+
+**Checking Current Mode:**
+
+```ruby
+ModelSettings.configuration.validation_mode
+# => :collect (in development)
+# => :strict (in production)
+```
+
+**See Also:** [Configuration Spec](../../spec/model_settings/validation_timing_spec.rb) for comprehensive examples
+
 ## Per-Model Configuration
 
 Override global config per model:
@@ -350,3 +449,4 @@ User.inherit_settings  # => true
 | `inheritable_options` | Auto-populated | Which options nested settings inherit from parents |
 | `add_inheritable_option(name)` | N/A | Add option to inherited list (if not explicitly set) |
 | `module_callback(name, callback)` | Per-module | Configure when module's logic runs in Rails lifecycle |
+| `validation_mode` | Auto-detected | How validation errors are reported (`:strict` or `:collect`) |
