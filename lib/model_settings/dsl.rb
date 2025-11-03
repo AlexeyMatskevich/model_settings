@@ -268,7 +268,7 @@ module ModelSettings
         end
 
         # Validate registered options
-        ModelSettings::ModuleRegistry.validate_setting_options!(setting_obj)
+        ModelSettings::ModuleRegistry.validate_setting_options!(setting_obj, self)
 
         # Execute definition hooks
         ModelSettings::ModuleRegistry.execute_definition_hooks(setting_obj, self)
@@ -546,6 +546,22 @@ module ModelSettings
             # Store model-specific inheritable options
             self._model_inheritable_options = Array(value)
           end
+        end
+      end
+
+      # Get a specific settings_config value
+      #
+      # @param key [Symbol] Configuration key
+      # @return [Object, nil] Configuration value or nil if not set
+      #
+      # @example
+      #   settings_config_value(:inherit_authorization)
+      #   # => true
+      #
+      def settings_config_value(key)
+        case key
+        when :inherit_authorization
+          _settings_inherit_authorization if respond_to?(:_settings_inherit_authorization)
         end
       end
 

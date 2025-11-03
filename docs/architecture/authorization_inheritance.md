@@ -662,11 +662,11 @@ end
 **Deliverable**: Design document ✅
 
 **Tasks**:
-- [x] Study specification for authorization inheritance
-- [x] Document 5-level priority system
-- [x] Document priority resolution algorithm
-- [x] Identify edge cases
-- [x] Create implementation plan
+- [ ] Study specification for authorization inheritance
+- [ ] Document 5-level priority system
+- [ ] Document priority resolution algorithm
+- [ ] Identify edge cases
+- [ ] Create implementation plan
 
 ---
 

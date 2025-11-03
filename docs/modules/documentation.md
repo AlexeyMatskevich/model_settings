@@ -83,6 +83,6 @@ See full README for example output.
 ## See Also
 
 - [Module Development Guide](../guides/module_development.md) - Learn how to create custom modules like Documentation
-- [ModuleRegistry API Reference](../api/module_registry.md) - Complete API documentation
+- [ModuleRegistry API Reference](../core/module_registry.md) - Complete API documentation
 - [Custom Module Example](../../examples/custom_module/) - Working example of a custom module
 - [Configuration Guide](../core/configuration.md) - Global configuration options

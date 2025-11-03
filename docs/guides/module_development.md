@@ -91,7 +91,7 @@ end
 - Tracks which modules are active on each model
 - Allows introspection (`ModuleRegistry.module_registered?(:audit_trail)`)
 
-**Key method**: [`ModuleRegistry.register_module`](../api/module_registry.md#register_module)
+**Key method**: [`ModuleRegistry.register_module`](../core/module_registry.md#register_module)
 
 ---
 
@@ -126,7 +126,55 @@ setting :premium, audit_user: "not callable" # ❌ Raises ArgumentError
 
 **Pattern**: **Validate early** - catch configuration errors at definition-time (class loading), not runtime.
 
-**Key method**: [`ModuleRegistry.register_option`](../api/module_registry.md#register_option)
+**Key method**: [`ModuleRegistry.register_option`](../core/module_registry.md#register_option)
+
+#### Validator Signature: 3 Parameters
+
+**IMPORTANT**: Validators receive **3 parameters** in this specific order:
+
+```ruby
+ModuleRegistry.register_option(:my_option) do |value, setting, model_class|
+  # value: The actual value passed (e.g., :detailed, [:admin, :manager], etc.)
+  # setting: The Setting object being defined
+  # model_class: The model class (e.g., User, Account)
+end
+```
+
+**Parameter Order: `|value, setting, model_class|`**
+
+**Common Use Cases:**
+
+```ruby
+# 1. Validate value only (most common)
+ModuleRegistry.register_option(:audit_level) do |value, setting, model_class|
+  unless [:minimal, :detailed].include?(value)
+    raise ArgumentError, "audit_level must be :minimal or :detailed"
+  end
+end
+
+# 2. Use setting context in validation
+ModuleRegistry.register_option(:sync_from) do |value, setting, model_class|
+  unless model_class.find_setting(value)
+    raise ArgumentError,
+      "sync_from references unknown setting: #{value}. " \
+      "Available settings: #{model_class.settings.map(&:name).join(', ')}"
+  end
+end
+
+# 3. Use model_class for validation
+ModuleRegistry.register_option(:authorize_with) do |value, setting, model_class|
+  unless value.is_a?(Symbol)
+    policy_type = (model_class.name.include?("ActionPolicy")) ? "rule" : "method"
+    raise ArgumentError,
+      "authorize_with must be a Symbol pointing to a policy #{policy_type}"
+  end
+end
+```
+
+**Why 3 parameters?**
+- `value` - What you're validating
+- `setting` - Context about the setting being defined (name, parent, options)
+- `model_class` - Context about the model (check other settings, config, etc.)
 
 ---
 
@@ -161,8 +209,8 @@ end
 **Why centralized storage**: The ModuleRegistry provides a single place to store all module-specific metadata, avoiding `class_attribute` pollution.
 
 **Key methods**:
-- [`ModuleRegistry.on_setting_defined`](../api/module_registry.md#on_setting_defined)
-- [`ModuleRegistry.set_module_metadata`](../api/module_registry.md#set_module_metadata)
+- [`ModuleRegistry.on_setting_defined`](../core/module_registry.md#on_setting_defined)
+- [`ModuleRegistry.set_module_metadata`](../core/module_registry.md#set_module_metadata)
 
 ---
 
@@ -189,7 +237,7 @@ end
 
 **Why it matters**: Reduces repetition for deeply nested settings.
 
-**Key method**: [`ModuleRegistry.register_inheritable_option`](../api/module_registry.md#register_inheritable_option)
+**Key method**: [`ModuleRegistry.register_inheritable_option`](../core/module_registry.md#register_inheritable_option)
 
 **See also**: [Advanced Topics: Inheritable Options](#inheritable-options) for merge strategies.
 
@@ -218,7 +266,7 @@ end
 
 **Why it matters**: Some modules need to execute during Rails lifecycle (save, validation, commit). This makes timing configurable without code changes.
 
-**Key method**: [`ModuleRegistry.register_module_callback_config`](../api/module_registry.md#register_module_callback_config)
+**Key method**: [`ModuleRegistry.register_module_callback_config`](../core/module_registry.md#register_module_callback_config)
 
 **See also**: [Advanced Topics: Callback Configuration](#callback-configuration)
 
@@ -265,7 +313,7 @@ end
 - Respect conditional auditing (`audit_if`)
 - Handle both `:minimal` (no values) and `:detailed` (with values) levels
 
-**Key method**: [`ModuleRegistry.after_setting_change`](../api/module_registry.md#after_setting_change)
+**Key method**: [`ModuleRegistry.after_setting_change`](../core/module_registry.md#after_setting_change)
 
 ---
 
@@ -308,7 +356,7 @@ user.audited?(:premium)             # => true
 user.audit_history(:premium)        # => [#<AuditLog ...>, ...]
 ```
 
-**Key method**: [`ModuleRegistry.register_query_method`](../api/module_registry.md#register_query_method) (optional, for introspection API)
+**Key method**: [`ModuleRegistry.register_query_method`](../core/module_registry.md#register_query_method) (optional, for introspection API)
 
 ---
 
@@ -614,38 +662,111 @@ end
 
 **Merge Strategies:**
 
-| Strategy | Use For | Behavior |
-|----------|---------|----------|
-| `:replace` | Scalar values | Child value completely replaces parent |
-| `:append` | Arrays | Concatenates arrays: `parent + child` |
-| `:merge` | Hashes | Deep merges hashes: `parent.deep_merge(child)` |
+| Strategy | Use For | Behavior | Example |
+|----------|---------|----------|---------|
+| `:replace` | Scalar values | Child value completely replaces parent | `:detailed` → `:minimal` |
+| `:append` | Arrays | Concatenates arrays: `parent + child` | `[:admin]` + `[:manager]` = `[:admin, :manager]` |
+| `:merge` | Hashes | Deep merges hashes: `parent.deep_merge(child)` | `{a: 1}` + `{b: 2}` = `{a: 1, b: 2}` |
 
-**Examples:**
+**Detailed Examples:**
 
 ```ruby
-# :replace (default)
+# ============================================================================
+# Strategy 1: :replace (default) - For scalar values
+# ============================================================================
+# Use when: Values are simple scalars (symbols, strings, integers) that should
+#           completely replace parent values
+# Example from: Roles module (:inherit_authorization)
+
 register_inheritable_option(:audit_level, merge_strategy: :replace)
 
 setting :parent, audit_level: :detailed do
-  setting :child  # audit_level = :detailed
+  setting :child1                           # audit_level = :detailed (inherited)
+  setting :child2, audit_level: :minimal    # audit_level = :minimal (replaced)
 end
 
-# :append (for arrays)
+# ============================================================================
+# Strategy 2: :append - For arrays
+# ============================================================================
+# Use when: Child should ADD to parent's list, not replace it
+# Example from: Roles module (:viewable_by, :editable_by)
+
 register_inheritable_option(:viewable_by, merge_strategy: :append)
 
 setting :parent, viewable_by: [:admin] do
-  setting :child, viewable_by: [:manager]  # viewable_by = [:admin, :manager]
+  setting :child1                              # viewable_by = [:admin] (inherited)
+  setting :child2, viewable_by: [:manager]     # viewable_by = [:admin, :manager] (appended)
+  setting :child3, viewable_by: [:guest]       # viewable_by = [:admin, :guest] (appended)
 end
 
-# :merge (for hashes)
-register_inheritable_option(:meta, merge_strategy: :merge)
+# Real-world use case: Progressive authorization
+# Parent grants admin access, children ADD manager/guest without losing admin
+setting :billing, viewable_by: [:admin] do
+  setting :invoices, viewable_by: [:finance]    # [:admin, :finance] can view
+  setting :reports, viewable_by: [:manager]     # [:admin, :manager] can view
+end
 
-setting :parent, meta: {category: "billing"} do
-  setting :child, meta: {priority: "high"}  # meta = {category: "billing", priority: "high"}
+# ============================================================================
+# Strategy 3: :merge - For hashes
+# ============================================================================
+# Use when: Child should ADD keys to parent hash, merging deeply
+# Example: Custom metadata, feature flags
+
+register_inheritable_option(:metadata, merge_strategy: :merge)
+
+setting :parent, metadata: {category: "billing", visibility: "public"} do
+  setting :child1  # metadata = {category: "billing", visibility: "public"} (inherited)
+
+  setting :child2, metadata: {priority: "high"}
+  # metadata = {category: "billing", visibility: "public", priority: "high"} (merged)
+
+  setting :child3, metadata: {category: "reports", author: "system"}
+  # metadata = {category: "reports", visibility: "public", author: "system"}
+  # Note: "category" was replaced (deep_merge behavior), others merged
+end
+
+# Real-world use case: Feature configuration
+register_inheritable_option(:feature_config, merge_strategy: :merge)
+
+setting :ai_features, feature_config: {enabled: true, region: "us-east"} do
+  setting :chatbot, feature_config: {model: "gpt-4"}
+  # Result: {enabled: true, region: "us-east", model: "gpt-4"}
+
+  setting :voice, feature_config: {enabled: false, model: "whisper"}
+  # Result: {enabled: false, region: "us-east", model: "whisper"}
+  # Note: "enabled" replaced parent's true with false
 end
 ```
 
-**See**: [`ModuleRegistry.register_inheritable_option`](../api/module_registry.md#register_inheritable_option)
+**Choosing the Right Strategy:**
+
+| Your Option Type | Choose Strategy | Reason |
+|------------------|-----------------|--------|
+| Symbol, String, Integer | `:replace` | Scalars should override |
+| Boolean | `:replace` | true/false should override |
+| Array of roles/permissions | `:append` | Accumulate permissions |
+| Array of IDs | `:append` | Build composite list |
+| Configuration hash | `:merge` | Combine configs |
+| Metadata hash | `:merge` | Extend metadata |
+
+**Implementation Note:**
+
+When registering inheritable options, ModelSettings automatically detects the type and chooses the appropriate default:
+- Arrays default to `:append`
+- Hashes default to `:merge`
+- Everything else defaults to `:replace`
+
+But you should **always specify explicitly** for clarity:
+
+```ruby
+# ✅ GOOD - Explicit strategy
+register_inheritable_option(:viewable_by, merge_strategy: :append)
+
+# ⚠️ OKAY - Works but implicit (will default to :append for arrays)
+register_inheritable_option(:viewable_by)
+```
+
+**See**: [`ModuleRegistry.register_inheritable_option`](../core/module_registry.md#register_inheritable_option)
 
 ---
 
@@ -679,7 +800,7 @@ class User < ApplicationRecord
 end
 ```
 
-**See**: [`ModuleRegistry.register_exclusive_group`](../api/module_registry.md#register_exclusive_group)
+**See**: [`ModuleRegistry.register_exclusive_group`](../core/module_registry.md#register_exclusive_group)
 
 ---
 
@@ -718,7 +839,7 @@ end
 **When NOT to use:**
 - Compile-time modules (Roles, Pundit, ActionPolicy, I18n) - they only store metadata, no runtime execution needed
 
-**See**: [`ModuleRegistry.register_module_callback_config`](../api/module_registry.md#register_module_callback_config)
+**See**: [`ModuleRegistry.register_module_callback_config`](../core/module_registry.md#register_module_callback_config)
 
 ---
 
@@ -1155,7 +1276,7 @@ end
 ## API Reference
 
 For complete API documentation of all ModuleRegistry methods, see:
-**📚 [ModuleRegistry API Reference](../api/module_registry.md)**
+**📚 [ModuleRegistry API Reference](../core/module_registry.md)**
 
 ### Quick Reference
 
@@ -1206,7 +1327,7 @@ For complete API documentation of all ModuleRegistry methods, see:
 - [I18n Module](../modules/i18n.md) - Internationalization
 
 **API Reference:**
-- [ModuleRegistry API](../api/module_registry.md) - Complete API documentation
+- [ModuleRegistry API](../core/module_registry.md) - Complete API documentation
 
 **Examples:**
 - [AuditTrail Example](../../examples/custom_module/) - Complete working module
@@ -1240,7 +1361,7 @@ For complete API documentation of all ModuleRegistry methods, see:
 **Learning Resources:**
 
 1. **Start here**: Study the [AuditTrail example](../../examples/custom_module/)
-2. **Deep dive**: Read the [ModuleRegistry API](../api/module_registry.md)
+2. **Deep dive**: Read the [ModuleRegistry API](../core/module_registry.md)
 3. **Reference**: Examine built-in modules in `lib/model_settings/modules/`
 4. **Generate**: Use `rails generate model_settings:module` to scaffold your module
 

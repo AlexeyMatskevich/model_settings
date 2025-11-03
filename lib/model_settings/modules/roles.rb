@@ -67,7 +67,7 @@ module ModelSettings
       )
 
       # Register viewable_by option
-      ModelSettings::ModuleRegistry.register_option(:viewable_by) do |setting, value|
+      ModelSettings::ModuleRegistry.register_option(:viewable_by) do |value, setting, model_class|
         unless value == :all || value.is_a?(Array) || value.is_a?(Symbol)
           raise ArgumentError,
             "viewable_by must be :all, a Symbol, or an Array of Symbols " \
@@ -77,7 +77,7 @@ module ModelSettings
       end
 
       # Register editable_by option
-      ModelSettings::ModuleRegistry.register_option(:editable_by) do |setting, value|
+      ModelSettings::ModuleRegistry.register_option(:editable_by) do |value, setting, model_class|
         unless value == :all || value.is_a?(Array) || value.is_a?(Symbol)
           raise ArgumentError,
             "editable_by must be :all, a Symbol, or an Array of Symbols " \
@@ -98,6 +98,21 @@ module ModelSettings
         :editable_by,
         merge_strategy: :append
       )
+
+      # Register inherit_authorization option
+      ModelSettings::ModuleRegistry.register_option(:inherit_authorization) do |value, setting, model_class|
+        valid_values = [true, false, :view_only, :edit_only]
+        unless valid_values.include?(value)
+          raise ArgumentError,
+            "inherit_authorization must be one of: #{valid_values.join(", ")} " \
+            "(got #{value.inspect}). " \
+            "Examples:\n" \
+            "  inherit_authorization: true       # Inherit both view and edit\n" \
+            "  inherit_authorization: :view_only # Inherit only view permissions\n" \
+            "  inherit_authorization: :edit_only # Inherit only edit permissions\n" \
+            "  inherit_authorization: false      # Don't inherit"
+        end
+      end
 
       # Hook to capture role metadata when settings are defined
       ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
@@ -134,7 +149,129 @@ module ModelSettings
       end
 
       module ClassMethods
-        # Get all settings viewable by a specific role
+        # Resolve authorization using 5-level priority system
+        #
+        # Priority (highest to lowest):
+        # 1. Explicit setting value (not :inherit)
+        # 2. Explicit :inherit keyword
+        # 3. Setting inherit_authorization option
+        # 4. Model settings_config
+        # 5. Global configuration
+        #
+        # @param setting [ModelSettings::Setting] The setting to resolve authorization for
+        # @param aspect [Symbol] Authorization aspect (:viewable_by or :editable_by)
+        # @param visited [Set] Set of visited settings (for cycle detection)
+        # @return [Array<Symbol>, Symbol, nil] Resolved roles array, :all, or nil
+        #
+        def resolve_authorization_with_priority(setting, aspect, visited = Set.new)
+          # Level 1: Explicit setting value (not nil, not :inherit)
+          explicit = setting.options[aspect]
+          return normalize_roles(explicit) if explicit.present? && explicit != :inherit
+
+          # Level 2: Explicit :inherit keyword
+          return resolve_from_parent(setting, aspect, visited) if explicit == :inherit
+
+          # Level 3: Setting inherit_authorization option
+          if setting.options.key?(:inherit_authorization)
+            inherit_option = setting.options[:inherit_authorization]
+            case inherit_option
+            when true
+              return resolve_from_parent(setting, aspect, visited)
+            when :view_only
+              # :view_only: inherit only viewable_by, not editable_by
+              return (aspect == :viewable_by) ? resolve_from_parent(setting, aspect, visited) : nil
+            when :edit_only
+              # :edit_only: inherit only editable_by, not viewable_by
+              return (aspect == :editable_by) ? resolve_from_parent(setting, aspect, visited) : nil
+            when false
+              # Explicitly disabled
+              return nil
+            end
+          end
+
+          # Level 4: Model-level configuration
+          model_config = settings_config_value(:inherit_authorization) if respond_to?(:settings_config_value, true)
+          if model_config
+            case model_config
+            when true
+              return resolve_from_parent(setting, aspect, visited)
+            when :view_only
+              return (aspect == :viewable_by) ? resolve_from_parent(setting, aspect, visited) : nil
+            when :edit_only
+              return (aspect == :editable_by) ? resolve_from_parent(setting, aspect, visited) : nil
+            when false
+              return nil
+            end
+          end
+
+          # Level 5: Global configuration
+          if ModelSettings.configuration.respond_to?(:inherit_authorization)
+            global_config = ModelSettings.configuration.inherit_authorization
+            case global_config
+            when true
+              return resolve_from_parent(setting, aspect, visited)
+            when :view_only
+              return resolve_from_parent(setting, aspect, visited) if aspect == :viewable_by
+            when :edit_only
+              return resolve_from_parent(setting, aspect, visited) if aspect == :editable_by
+            end
+          end
+
+          # No inheritance - return nil (no authorization)
+          nil
+        end
+
+        # Resolve authorization from parent setting
+        #
+        # Recursively walks up the setting tree to find authorization.
+        # Includes cycle detection to prevent infinite loops.
+        #
+        # @param setting [ModelSettings::Setting] The setting
+        # @param aspect [Symbol] Authorization aspect (:viewable_by or :editable_by)
+        # @param visited [Set] Set of visited settings (for cycle detection)
+        # @return [Array<Symbol>, Symbol, nil] Resolved roles, or nil if no parent
+        #
+        # @raise [ArgumentError] If circular reference detected
+        #
+        def resolve_from_parent(setting, aspect, visited)
+          # Cycle detection
+          if visited.include?(setting.name)
+            cycle_path = visited.to_a.join(" -> ")
+            raise ArgumentError,
+              "Circular authorization inheritance detected: #{cycle_path} -> #{setting.name}"
+          end
+
+          visited = visited.dup.add(setting.name)
+          parent = setting.parent
+          return nil unless parent # No parent = no authorization
+
+          # Recursively resolve parent's authorization
+          resolve_authorization_with_priority(parent, aspect, visited)
+        end
+
+        # Normalize roles value to consistent format
+        #
+        # @param value [Symbol, Array, nil] Role value
+        # @return [Symbol, Array<Symbol>, nil] Normalized value
+        #
+        def normalize_roles(value)
+          return :all if value == :all
+          return nil if value.nil?
+          Array(value).map(&:to_sym)
+        end
+
+        # Find setting by name (utility method)
+        #
+        # @param name [Symbol] Setting name
+        # @return [ModelSettings::Setting, nil] Setting object or nil if not found
+        #
+        def find_setting_by_name(name)
+          all_settings_recursive.find { |s| s.name == name }
+        end
+
+        # Get all settings viewable by a specific role (with inheritance)
+        #
+        # Returns only settings with explicit authorization (not unrestricted settings).
         #
         # @param role [Symbol] Role name
         # @return [Array<Symbol>] Array of setting names
@@ -144,14 +281,19 @@ module ModelSettings
         #   # => [:billing_override, :display_name]
         #
         def settings_viewable_by(role)
-          all_roles = get_module_metadata(:roles)
-
-          all_roles.select do |_name, roles|
-            roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
-          end.keys
+          all_settings_recursive.select do |setting|
+            roles = resolve_authorization_with_priority(setting, :viewable_by)
+            # Only include settings with explicit authorization
+            # nil = no restriction (not included)
+            # :all = explicitly viewable by all (included)
+            # Array = viewable by specific roles (included if role matches)
+            roles && (roles == :all || roles.include?(role.to_sym))
+          end.map(&:name)
         end
 
-        # Get all settings editable by a specific role
+        # Get all settings editable by a specific role (with inheritance)
+        #
+        # Returns only settings with explicit authorization (not unrestricted settings).
         #
         # @param role [Symbol] Role name
         # @return [Array<Symbol>] Array of setting names
@@ -161,17 +303,20 @@ module ModelSettings
         #   # => [:billing_override]
         #
         def settings_editable_by(role)
-          all_roles = get_module_metadata(:roles)
-
-          all_roles.select do |_name, roles|
-            roles[:editable_by].include?(role.to_sym)
-          end.keys
+          all_settings_recursive.select do |setting|
+            roles = resolve_authorization_with_priority(setting, :editable_by)
+            # Only include settings with explicit authorization
+            # nil = no restriction (not included)
+            # :all = explicitly editable by all (included)
+            # Array = editable by specific roles (included if role matches)
+            roles && (roles == :all || roles.include?(role.to_sym))
+          end.map(&:name)
         end
       end
 
       # Instance Methods
 
-      # Check if a setting is viewable by a specific role
+      # Check if a setting is viewable by a specific role (with inheritance)
       #
       # @param setting_name [Symbol] Setting name
       # @param role [Symbol] Role name
@@ -181,14 +326,21 @@ module ModelSettings
       #   user.can_view_setting?(:billing_override, :manager)
       #   # => true
       #
+      # @example With inheritance
+      #   user.can_view_setting?(:nested_child, :admin)
+      #   # => true (inherited from parent)
+      #
       def can_view_setting?(setting_name, role)
-        roles = self.class.get_module_metadata(:roles, setting_name)
-        return true unless roles # No restriction = viewable
+        setting = self.class.find_setting_by_name(setting_name)
+        return true unless setting # Setting not found = viewable
 
-        roles[:viewable_by] == :all || roles[:viewable_by].include?(role.to_sym)
+        roles = self.class.resolve_authorization_with_priority(setting, :viewable_by)
+        return true if roles.nil? # No restriction = viewable
+
+        roles == :all || roles.include?(role.to_sym)
       end
 
-      # Check if a setting is editable by a specific role
+      # Check if a setting is editable by a specific role (with inheritance)
       #
       # @param setting_name [Symbol] Setting name
       # @param role [Symbol] Role name
@@ -198,11 +350,18 @@ module ModelSettings
       #   user.can_edit_setting?(:billing_override, :finance)
       #   # => true
       #
+      # @example With inheritance
+      #   user.can_edit_setting?(:nested_child, :admin)
+      #   # => true (inherited from parent)
+      #
       def can_edit_setting?(setting_name, role)
-        roles = self.class.get_module_metadata(:roles, setting_name)
-        return true unless roles # No restriction = editable
+        setting = self.class.find_setting_by_name(setting_name)
+        return true unless setting # Setting not found = editable
 
-        roles[:editable_by].include?(role.to_sym)
+        roles = self.class.resolve_authorization_with_priority(setting, :editable_by)
+        return true if roles.nil? # No restriction = editable
+
+        roles.include?(role.to_sym)
       end
     end
   end

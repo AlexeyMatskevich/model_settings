@@ -199,10 +199,11 @@ RSpec.describe ModelSettings::ModuleRegistry do
 
   describe ".validate_setting_options!" do
     let(:setting) { ModelSettings::Setting.new(:test, {viewable_by: [:admin]}) }
+    let(:model_class) { Class.new }
 
     context "when option has validator" do
       before do
-        described_class.register_option(:viewable_by) do |_setting, value|
+        described_class.register_option(:viewable_by) do |value, _setting, _model_class|
           raise ArgumentError, "Must be array" unless value.is_a?(Array)
         end
       end
@@ -211,7 +212,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
         let(:setting) { ModelSettings::Setting.new(:test, {viewable_by: [:admin]}) }
 
         it "does NOT raise error" do
-          expect { described_class.validate_setting_options!(setting) }.not_to raise_error
+          expect { described_class.validate_setting_options!(setting, model_class) }.not_to raise_error
         end
       end
 
@@ -219,7 +220,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
         let(:setting) { ModelSettings::Setting.new(:test, {viewable_by: "admin"}) }
 
         it "raises ArgumentError" do
-          expect { described_class.validate_setting_options!(setting) }.to raise_error(ArgumentError, "Must be array")
+          expect { described_class.validate_setting_options!(setting, model_class) }.to raise_error(ArgumentError, "Must be array")
         end
       end
     end
@@ -228,7 +229,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
       let(:setting) { ModelSettings::Setting.new(:test, {unregistered_option: "value"}) }
 
       it "does NOT validate" do
-        expect { described_class.validate_setting_options!(setting) }.not_to raise_error
+        expect { described_class.validate_setting_options!(setting, model_class) }.not_to raise_error
       end
     end
   end
@@ -805,7 +806,7 @@ RSpec.describe ModelSettings::ModuleRegistry do
 
     before do
       # Register option with validator
-      described_class.register_option(:audit_level) do |setting, value|
+      described_class.register_option(:audit_level) do |value, setting, model_class|
         valid_levels = [:none, :basic, :full]
         unless valid_levels.include?(value)
           raise ArgumentError, "audit_level must be one of #{valid_levels.inspect}"

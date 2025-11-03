@@ -768,7 +768,7 @@ end
 **Файлы**:
 - `docs/guides/module_development.md` - Guide для разработчиков модулей
 - `docs/api/callbacks.md` - Callbacks API reference
-- `docs/api/module_registry.md` - Module Registry API
+- `docs/core/module_registry.md` - Module Registry API
 - Примеры в `examples/custom_module/`
 
 ---

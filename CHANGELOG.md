@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-11-04
+
+### Changed (BREAKING)
+- **Validator Signature Unified**: All `register_option` validators now use consistent parameter order
+  - **Old signature** (DEPRECATED): `register_option(:name) do |setting, value|`
+  - **New signature** (REQUIRED): `register_option(:name) do |value, setting, model_class|`
+  - **Reason**: Provides access to model_class for context-aware validation, consistent with ModuleRegistry API
+  - **Impact**: Custom modules must update validator blocks (8 files changed: 3 modules, 2 infrastructure, 1 generator, 2 test files)
+  - **Migration**: Change block parameter order from `|setting, value|` to `|value, setting, model_class|`
+  - Affected modules updated: Roles (3 validators), PolicyBasedAuthorization (1 validator)
+  - ModuleRegistry API updated: `validate_setting_options!(setting, model_class)` now passes model_class to validators
+  - Generator template updated to generate new signature
+  - All 1405 tests passing, 0 failures
+
+### Added
+- **Module Development Guide Enhancements**: Comprehensive validator signature and merge strategies documentation
+  - **Validator Signature Section**: 50 lines explaining 3-parameter signature with use cases and examples
+  - **Merge Strategies Deep Dive**: 104 lines (expanded from 20) with detailed examples for :replace, :append, :merge
+  - Real-world use cases for each merge strategy (progressive authorization, feature configuration)
+  - "Choosing the Right Strategy" decision table for module developers
+  - Implementation notes on automatic type detection
+- **Generator Template API Coverage**: Module generator now includes all Module Registry APIs
+  - Added "Register Inheritable Options" section with merge strategy examples
+  - Added "Register Query Methods" section with introspection API examples
+  - Added "Store Module Metadata" section with get/set/check examples
+  - Added module_included? guard in on_setting_defined hook
+  - Added metadata storage example in option processing
+  - Total: ~60 lines of API guidance and examples added to template
+
+### Fixed
+- **Documentation Structure**: Reorganized docs for consistency
+  - Moved `docs/api/module_registry.md` → `docs/core/module_registry.md` (ModuleRegistry is Core API, not separate category)
+  - Removed redundant `docs/api/` directory (had only 1 file)
+  - Updated 21 references across documentation (guides, modules, architecture docs)
+  - All Core API reference now in `docs/core/`: adapters, callbacks, dsl, module_registry, queries, validation
+
+### Added (Sprint 13)
+- **Authorization Inheritance System**: Complete inheritance support for all authorization modules
+  - **5-Level Priority System**: Authorization resolution with clear precedence
+    1. Explicit setting value (`viewable_by: [:admin]` or `authorize_with: :admin?`)
+    2. Explicit `:inherit` keyword (`viewable_by: :inherit` or `authorize_with: :inherit`)
+    3. Setting `inherit_authorization` option (`inherit_authorization: true`)
+    4. Model `settings_config` (`settings_config inherit_authorization: true`)
+    5. Global configuration (`ModelSettings.configuration.inherit_authorization`)
+  - **Partial Inheritance** (Roles module only):
+    - `inherit_authorization: :view_only` - Inherit only `viewable_by`, not `editable_by`
+    - `inherit_authorization: :edit_only` - Inherit only `editable_by`, not `viewable_by`
+  - **Roles Module Inheritance**: Full support with partial inheritance options (21 new tests)
+  - **Pundit Module Inheritance**: Complete inheritance via PolicyBasedAuthorization (15 new tests)
+  - **ActionPolicy Module Inheritance**: Complete inheritance via PolicyBasedAuthorization (15 new tests)
+  - **Global Configuration**: `ModelSettings.configure { |c| c.inherit_authorization = true }` (8 integration tests)
+  - **Query Methods**: Inheritance-aware methods (`settings_viewable_by`, `authorization_for_setting`, etc.)
+  - **Documentation**: Comprehensive inheritance examples in all authorization module docs
+  - **Total**: 38 new tests, all 1362 tests passing, 0 failures
+
 ## [0.8.0] - 2025-11-03
 
 ### Added

@@ -24,6 +24,9 @@ require_relative "model_settings/adapters/store_model"
 # Optional modules
 require_relative "model_settings/modules/i18n" if defined?(I18n)
 
+# Authorization utilities (used by policy-based modules)
+require_relative "model_settings/modules/policy_based_authorization"
+
 # Authorization modules (mutually exclusive)
 require_relative "model_settings/modules/roles"
 require_relative "model_settings/modules/pundit"

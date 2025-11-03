@@ -140,6 +140,85 @@ end
 
 ---
 
+## Authorization Inheritance
+
+Child settings can inherit authorization from their parent settings using a 5-level priority system.
+
+### Explicit `:inherit` Keyword
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Pundit
+
+  setting :billing, authorize_with: :manage_billing? do
+    setting :invoices, authorize_with: :inherit  # Inherits :manage_billing?
+    setting :reports, authorize_with: :inherit   # Inherits :manage_billing?
+  end
+end
+```
+
+### Setting-Level `inherit_authorization` Option
+
+```ruby
+setting :billing, authorize_with: :manage_billing? do
+  setting :invoices, inherit_authorization: true   # Inherits :manage_billing?
+  setting :archive, inherit_authorization: false   # No inheritance
+end
+```
+
+### Model-Level Configuration
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Pundit
+
+  settings_config inherit_authorization: true  # All nested settings inherit by default
+
+  setting :billing, authorize_with: :manage_billing? do
+    setting :invoices    # Automatically inherits :manage_billing?
+    setting :reports     # Automatically inherits :manage_billing?
+  end
+end
+```
+
+### Global Configuration
+
+```ruby
+# config/initializers/model_settings.rb
+ModelSettings.configure do |config|
+  config.inherit_authorization = true  # Enable inheritance globally
+end
+```
+
+### 5-Level Priority System
+
+Authorization is resolved using this priority (highest to lowest):
+
+1. **Explicit setting value** - `authorize_with: :admin?`
+2. **Explicit `:inherit` keyword** - `authorize_with: :inherit`
+3. **Setting `inherit_authorization` option** - `inherit_authorization: true`
+4. **Model `settings_config`** - `settings_config inherit_authorization: true`
+5. **Global configuration** - `ModelSettings.configuration.inherit_authorization`
+
+### Querying Inherited Authorization
+
+```ruby
+# Find authorization for a setting (including inherited)
+User.authorization_for_setting(:invoices)  # => :manage_billing? (inherited)
+
+# Find all settings requiring a specific permission
+User.settings_requiring(:manage_billing?)  # => [:billing, :invoices, :reports]
+
+# Find all settings with any authorization
+User.authorized_settings  # => [:billing, :invoices, :reports]
+```
+
+**Note:** For policy-based modules like Pundit, `:view_only` and `:edit_only` options behave the same as `true` since Pundit uses a single `authorize_with` for both viewing and editing.
+
+---
+
 ## Testing
 
 ### Policy Specs
@@ -318,7 +397,7 @@ end
 ## See Also
 
 - [Module Development Guide](../../guides/module_development.md) - Learn how to create custom modules like Pundit
-- [ModuleRegistry API Reference](../../api/module_registry.md) - Complete API documentation
+- [ModuleRegistry API Reference](../../core/module_registry.md) - Complete API documentation
 - [Custom Module Example](../../../examples/custom_module/) - Working example of a custom module
 - [Policy-Based Authorization](README.md) - Overview of policy-based modules
 - [Configuration Guide](../../core/configuration.md) - Global configuration options

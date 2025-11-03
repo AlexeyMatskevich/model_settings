@@ -60,108 +60,28 @@ module ModelSettings
     module ActionPolicy
       extend ActiveSupport::Concern
 
-      # Module-level registrations (executed ONCE when module is loaded)
+      # Register as policy-based authorization module FIRST (before include)
+      # This single call handles all registration (module, exclusive group, query methods, etc.)
+      PolicyBasedAuthorization.register_policy_module(:action_policy, self)
 
-      # Register module
-      ModelSettings::ModuleRegistry.register_module(:action_policy, self)
-
-      # Register as part of exclusive authorization group
-      ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :action_policy)
-
-      # Register query methods for introspection
-      ModelSettings::ModuleRegistry.register_query_method(
-        :action_policy, :authorization_for_setting, :class,
-        description: "Get the authorization method for a specific setting",
-        parameters: {name: :Symbol},
-        returns: "Symbol, nil"
-      )
-      ModelSettings::ModuleRegistry.register_query_method(
-        :action_policy, :settings_requiring, :class,
-        description: "Get all settings that require a specific permission",
-        parameters: {permission: :Symbol},
-        returns: "Array<Symbol>"
-      )
-      ModelSettings::ModuleRegistry.register_query_method(
-        :action_policy, :authorized_settings, :class,
-        description: "Get all settings that have authorization",
-        returns: "Array<Symbol>"
-      )
-
-      # Register authorize_with option
-      ModelSettings::ModuleRegistry.register_option(:authorize_with) do |setting, value|
-        unless value.is_a?(Symbol)
-          raise ArgumentError,
-            "authorize_with must be a Symbol pointing to a policy rule " \
-            "(got #{value.class}). " \
-            "Example: authorize_with: :manage_billing?\n" \
-            "Use Roles Module for simple role-based checks with arrays."
-        end
-      end
-
-      # Register authorize_with as inheritable option with :replace strategy
-      # Child settings override parent policy (no inheritance of policy references)
-      ModelSettings::ModuleRegistry.register_inheritable_option(
-        :authorize_with,
-        merge_strategy: :replace
-      )
-
-      # Hook to capture authorization metadata when settings are defined
-      ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
-        next unless ModelSettings::ModuleRegistry.module_included?(:action_policy, model_class)
-
-        if setting.options.key?(:authorize_with)
-          ModelSettings::ModuleRegistry.set_module_metadata(
-            model_class,
-            :action_policy,
-            setting.name,
-            setting.options[:authorize_with]
-          )
-        end
-      end
+      # Include PolicyBasedAuthorization AFTER registration
+      include PolicyBasedAuthorization
 
       included do
         # Add to active modules FIRST (before conflict check)
         settings_add_module(:action_policy) if respond_to?(:settings_add_module)
 
         # Check for conflicts with other authorization modules
-        settings_check_exclusive_conflict!(:action_policy) if respond_to?(:settings_check_exclusive_conflict!)
+        ModelSettings::ModuleRegistry.check_exclusive_conflict!(self, :action_policy)
       end
 
       module ClassMethods
-        # Get the authorization method for a specific setting
+        # Return the module name for PolicyBasedAuthorization
         #
-        # @param name [Symbol] Setting name
-        # @return [Symbol, nil] Policy rule name, or nil if not authorized
+        # @return [Symbol] The module name
         #
-        # @example
-        #   User.authorization_for_setting(:billing_override)
-        #   # => :manage_billing?
-        #
-        def authorization_for_setting(name)
-          get_module_metadata(:action_policy, name)
-        end
-
-        # Get all settings that require a specific permission
-        #
-        # @param permission [Symbol] Policy rule name
-        # @return [Array<Symbol>] Array of setting names
-        #
-        # @example
-        #   User.settings_requiring(:admin?)
-        #   # => [:api_access, :system_config]
-        #
-        def settings_requiring(permission)
-          all_auth = get_module_metadata(:action_policy)
-
-          all_auth.select { |_name, method| method == permission }.keys
-        end
-
-        # Get all settings that have authorization
-        #
-        # @return [Array<Symbol>] Array of setting names
-        #
-        def authorized_settings
-          get_module_metadata(:action_policy).keys
+        def policy_module_name
+          :action_policy
         end
       end
     end

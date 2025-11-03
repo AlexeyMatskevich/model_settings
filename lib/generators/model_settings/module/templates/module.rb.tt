@@ -39,19 +39,86 @@ module ModelSettings
 <%- if has_custom_options? -%>
         # Register custom DSL options
 <%- custom_options.each do |opt| -%>
-        ModelSettings::ModuleRegistry.register_option(<%= opt[:symbol] %>) do |setting, value|
+        ModelSettings::ModuleRegistry.register_option(<%= opt[:symbol] %>) do |value, setting, model_class|
           <%= opt[:validator_example] %>
         end
 
 <%- end -%>
 <%- end -%>
+        # ============================================================================
+        # OPTIONAL: Register Inheritable Options
+        # ============================================================================
+        # Make options inheritable so nested settings can inherit parent values
+        #
+        # Available merge strategies:
+        # - :replace - Child value replaces parent (default)
+        # - :append  - Child value appended to parent (for arrays)
+        # - :merge   - Child hash merged into parent (for hashes)
+        #
+        # Example:
+        # ModelSettings::ModuleRegistry.register_inheritable_option(
+        #   :my_option,
+        #   merge_strategy: :replace
+        # )
+
+        # ============================================================================
+        # OPTIONAL: Register Query Methods (for introspection)
+        # ============================================================================
+        # Register methods that allow users to query module metadata
+        #
+        # Scope can be :class or :instance
+        #
+        # Example:
+        # ModelSettings::ModuleRegistry.register_query_method(
+        #   <%= module_symbol_name %>,
+        #   :settings_with_<%= module_file_name %>,
+        #   :class,
+        #   description: "Get all settings using this module",
+        #   returns: "Array<Symbol>",
+        #   example: "User.settings_with_<%= module_file_name %>  # => [:example]"
+        # )
+
+        # ============================================================================
+        # OPTIONAL: Store Module Metadata
+        # ============================================================================
+        # Use metadata storage if you need to capture option values for later use
+        #
+        # You can check and store metadata in on_setting_defined hook:
+        #
+        # if setting.options[<%= module_symbol_name %>]
+        #   ModuleRegistry.set_module_metadata(
+        #     model_class,
+        #     <%= module_symbol_name %>,
+        #     setting.name,
+        #     { your: "metadata" }
+        #   )
+        # end
+        #
+        # Later retrieve with:
+        # meta = ModuleRegistry.get_module_metadata(model_class, <%= module_symbol_name %>, setting_name)
+        # exists = ModuleRegistry.module_metadata?(model_class, <%= module_symbol_name %>, setting_name)
+
+        # ============================================================================
+        # Lifecycle Hooks
+        # ============================================================================
+
         # Definition-time hook: called when setting is defined
         ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+          # Guard: only process if this module is included
+          next unless ModelSettings::ModuleRegistry.module_included?(<%= module_symbol_name %>, model_class)
+
 <%- if has_custom_options? -%>
           # Process your custom options
 <%- custom_options.each do |opt| -%>
           if setting.options[<%= opt[:symbol] %>]
             # TODO: Add validation or processing for <%= opt[:name] %>
+            # Example: Store metadata for later use
+            # ModelSettings::ModuleRegistry.set_module_metadata(
+            #   model_class,
+            #   <%= module_symbol_name %>,
+            #   setting.name,
+            #   { <%= opt[:name] %>: setting.options[<%= opt[:symbol] %>] }
+            # )
           end
 <%- end -%>
 <%- else -%>
@@ -59,7 +126,7 @@ module ModelSettings
           # Examples:
           # - Validate option combinations
           # - Compute derived metadata
-          # - Store option values
+          # - Store option values using ModuleRegistry.set_module_metadata
 <%- end -%>
         end
 

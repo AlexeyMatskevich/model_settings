@@ -259,15 +259,16 @@ module ModelSettings
       # Validate registered options for a setting
       #
       # @param setting [Setting] The setting to validate
+      # @param model_class [Class] The model class
       # @raise [ArgumentError] if validation fails
-      def validate_setting_options!(setting)
+      def validate_setting_options!(setting, model_class)
         setting.options.each do |option_name, value|
           next unless registered_options.key?(option_name)
 
           validator = registered_options[option_name]
           next if validator.nil?
 
-          validator.call(setting, value)
+          validator.call(value, setting, model_class)
         end
       end
 
