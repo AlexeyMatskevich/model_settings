@@ -89,6 +89,109 @@ end
 
 Used by Roles, Pundit, and ActionPolicy modules for inheriting `viewable_by`, `editable_by`, and `authorize_with` options.
 
+### inheritable_options
+
+Configure which setting options should be automatically inherited by nested settings (Sprint 11 Phase 4).
+
+```ruby
+ModelSettings.configure do |config|
+  # Explicitly set which options are inherited
+  config.inheritable_options = [:authorize_with, :viewable_by, :custom_metadata]
+end
+```
+
+**How It Works:**
+
+Inheritable options are automatically copied from parent settings to child settings unless explicitly overridden. This provides three levels of configuration:
+
+1. **Global Configuration** - Set via `config.inheritable_options` (highest priority when explicit)
+2. **Module Registration** - Modules auto-register their options (via `register_inheritable_option`)
+3. **Model-Specific** - Override per-model via `settings_config` (highest priority)
+
+**Automatic Registration:**
+
+Built-in modules automatically register their options as inheritable:
+- `Roles` module: `:viewable_by`, `:editable_by`
+- `Pundit` module: `:authorize_with`
+- `ActionPolicy` module: `:authorize_with`
+
+**Global Configuration - Two Approaches:**
+
+```ruby
+# Approach 1: Auto-population (recommended for most cases)
+ModelSettings.configure do |config|
+  # Don't set inheritable_options explicitly
+  # Modules will auto-register their options as they're loaded
+end
+# Result: [:authorize_with, :viewable_by, :editable_by] + any custom module options
+
+# Approach 2: Explicit control (COMPLETE override)
+ModelSettings.configure do |config|
+  config.inheritable_options = [:authorize_with, :custom_option]
+  # ⚠️ WARNING: This COMPLETELY REPLACES the auto-populated list!
+  # Modules CANNOT add their options when this is explicitly set.
+end
+# Result: Only [:authorize_with, :custom_option]
+# Module-registered options (viewable_by, editable_by, etc.) are IGNORED
+```
+
+**Adding Custom Inheritable Options:**
+
+```ruby
+ModelSettings.configure do |config|
+  # Add without explicit set (allows modules to continue registering)
+  config.add_inheritable_option(:audit_user)
+  config.add_inheritable_option(:feature_flag)
+end
+```
+
+**Per-Model Override:**
+
+```ruby
+class User < ApplicationRecord
+  include ModelSettings::DSL
+
+  # This model only inherits authorization options
+  settings_config inheritable_options: [:viewable_by, :editable_by]
+end
+```
+
+**Checking Configuration:**
+
+```ruby
+# Global level
+ModelSettings.configuration.inheritable_options
+# => [:authorize_with, :viewable_by, :editable_by]
+
+ModelSettings.configuration.inheritable_options_explicitly_set?
+# => false (if using auto-population)
+
+# Model level
+User.inheritable_options
+# => [:viewable_by, :editable_by, :custom_option]
+```
+
+**When to Use Each Approach:**
+
+| Approach | Use Case |
+|----------|----------|
+| **Auto-population** (don't set explicitly) | You want modules to automatically register their options. Recommended for most applications. |
+| **Explicit global list** (`inheritable_options = [...]`) | You need strict control over exactly which options are inherited across all models. |
+| **Per-model override** (`settings_config inheritable_options: [...]`) | Different models need different inheritance behavior. |
+| **Add to auto-populated** (`add_inheritable_option`) | You have custom options to add but want modules to keep working. |
+
+**Important Notes:**
+
+- ⚠️ **Setting `inheritable_options` explicitly COMPLETELY REPLACES the list** - modules cannot add their options
+- Use `add_inheritable_option` if you want to add custom options while preserving module auto-registration
+- Per-model configuration always takes precedence over global configuration
+- Check `inheritable_options_explicitly_set?` to see if explicit control is active
+- Explicit setting at any level (global or per-model) disables auto-population at that level
+
+**See Also:**
+- [Module Development - Registering Inheritable Options](../guides/module_development.md#registering-inheritable-options)
+- [Option Inheritance in Nested Settings](inheritance.md#option-inheritance-in-nested-settings) - How options are inherited by child settings
+
 ### module_callback
 
 Configure when a module's logic runs in the Rails lifecycle (Sprint 11 Phase 3).
@@ -244,4 +347,6 @@ User.inherit_settings  # => true
 | `default_modules` | `[]` | Auto-include optional modules when including DSL |
 | `inherit_settings` | `true` | Child classes inherit parent settings |
 | `inherit_authorization` | `true` | Child settings inherit parent auth rules |
+| `inheritable_options` | Auto-populated | Which options nested settings inherit from parents |
+| `add_inheritable_option(name)` | N/A | Add option to inherited list (if not explicitly set) |
 | `module_callback(name, callback)` | Per-module | Configure when module's logic runs in Rails lifecycle |

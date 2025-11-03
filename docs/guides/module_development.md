@@ -382,6 +382,125 @@ ModelSettings::ModuleRegistry.register_option(:min_value, validator)
 
 ---
 
+#### `register_inheritable_option(option_name)`
+
+Register an option as inheritable, allowing nested settings to automatically inherit it from parent settings.
+
+```ruby
+# In your module (at module level, outside included block)
+ModelSettings::ModuleRegistry.register_inheritable_option(:viewable_by)
+ModelSettings::ModuleRegistry.register_inheritable_option(:editable_by)
+```
+
+**Parameters:**
+- `option_name` (Symbol) - Option name to register as inheritable
+
+**Behavior:**
+- Options registered this way are automatically added to the global inheritable options list
+- Nested settings will inherit these options from their parents unless explicitly overridden
+- ⚠️ **User can completely disable**: If user explicitly sets `config.inheritable_options = [...]`, your registration is **IGNORED**
+
+**When to Use:**
+Register options as inheritable when:
+- The option represents authorization/permissions that should cascade to children
+- The option represents metadata that logically applies to nested settings
+- Users would expect child settings to inherit the option by default
+
+**Example - Roles Module:**
+```ruby
+module ModelSettings
+  module Modules
+    module Roles
+      # Register options
+      ModelSettings::ModuleRegistry.register_option(:viewable_by) do |setting, value|
+        unless value == :all || value.is_a?(Array)
+          raise ArgumentError, "viewable_by must be :all or Array"
+        end
+      end
+
+      ModelSettings::ModuleRegistry.register_option(:editable_by) do |setting, value|
+        unless value == :all || value.is_a?(Array)
+          raise ArgumentError, "editable_by must be :all or Array"
+        end
+      end
+
+      # Register as inheritable (NEW in Phase 4)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:viewable_by)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:editable_by)
+
+      # ... rest of module
+    end
+  end
+end
+```
+
+**Usage in Models:**
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  setting :billing, viewable_by: [:admin, :finance] do
+    setting :invoices  # Automatically inherits viewable_by: [:admin, :finance]
+    setting :reports   # Automatically inherits viewable_by: [:admin, :finance]
+  end
+end
+```
+
+**⚠️ IMPORTANT: User Can Disable Your Module's Inheritance**
+
+When user explicitly sets `inheritable_options`, your module's `register_inheritable_option` calls are **COMPLETELY IGNORED**:
+
+```ruby
+# In your module: you register your options
+ModelSettings::ModuleRegistry.register_inheritable_option(:viewable_by)
+ModelSettings::ModuleRegistry.register_inheritable_option(:editable_by)
+
+# User explicitly sets inheritable options (REPLACES your registration)
+ModelSettings.configure do |config|
+  config.inheritable_options = [:authorize_with]  # ← Your options NOT included!
+end
+
+# Result: Option inheritance for your module WILL NOT WORK
+# Child settings will NOT inherit :viewable_by or :editable_by
+```
+
+**This is by design** - users have full control over which options are inherited. Your module should:
+- Document that inheritance is optional
+- Work correctly even when inheritance is disabled
+- Not assume nested settings will automatically inherit your options
+
+**User has three choices:**
+
+```ruby
+# Choice 1: Auto-population (your module works automatically)
+ModelSettings.configure do |config|
+  # Don't set inheritable_options - modules auto-register
+end
+
+# Choice 2: Explicit inclusion (user manually includes your options)
+ModelSettings.configure do |config|
+  config.inheritable_options = [:viewable_by, :editable_by, :custom]  # ← User includes your options
+end
+
+# Choice 3: Disable inheritance (your module inheritance doesn't work)
+ModelSettings.configure do |config|
+  config.inheritable_options = [:custom]  # ← Your options NOT included
+end
+```
+
+**Checking Registration:**
+```ruby
+ModelSettings::ModuleRegistry.inheritable_option?(:viewable_by)  # => true
+ModelSettings::ModuleRegistry.registered_inheritable_options     # => Set[:viewable_by, :editable_by, :authorize_with]
+```
+
+**See Also:**
+- [Configuration - inheritable_options](../core/configuration.md#inheritable_options) - User-facing configuration
+- [Settings Inheritance](../core/inheritance.md) - How option inheritance works
+
+---
+
 #### `validate_setting_options!(setting)`
 
 Validate all registered options for a setting.
@@ -471,6 +590,211 @@ mod = ModelSettings::ModuleRegistry.get_module(:roles)
 ---
 
 ### Centralized Metadata Storage
+
+#### Why Module Metadata?
+
+**The Problem:** Modules need to store processed data for query methods and runtime operations. But where should this data live?
+
+When you create a module that adds custom DSL options (like `viewable_by: [:admin]`), you often need to:
+1. **Process** the raw option value (normalize, validate, transform)
+2. **Store** the processed result somewhere
+3. **Query** it later (e.g., `User.settings_viewable_by(:admin)`)
+
+Module Metadata provides a centralized, isolated storage solution for this processed data.
+
+---
+
+**❌ Alternative 1: Store in `setting.options` (User Namespace Pollution)**
+
+```ruby
+# Problem: Pollutes user's option namespace
+setting.options[:viewable_by]              # Raw data: [:admin, :finance] or :all or "admin"
+setting.options[:_viewable_by_normalized]  # ❌ Pollutes namespace with internal data!
+
+# What if two modules process the same option differently?
+setting.options[:_viewable_by_roles_normalized]    # Module A's version
+setting.options[:_viewable_by_pundit_normalized]   # Module B's version
+# 🔴 Namespace collision risk!
+```
+
+**Why it doesn't work:**
+- Pollutes user-defined options with internal module data
+- `setting.options` should contain raw DSL options, not processed results
+- Risk of namespace collision between modules
+
+---
+
+**❌ Alternative 2: Store in Class Variables (Model Isolation Broken)**
+
+```ruby
+module Roles
+  @@roles_data = {}  # ❌ Global state!
+
+  def self.store_roles(model_class, setting, data)
+    @@roles_data[model_class] ||= {}
+    @@roles_data[model_class][setting] = data
+  end
+end
+
+# Problem: Shared between ALL models
+User.setting :billing, viewable_by: [:admin]
+Post.setting :billing, viewable_by: [:editor]
+
+Roles.@@roles_data  # => {User => {...}, Post => {...}}
+# If you forget to check model_class → can accidentally read wrong model's data!
+```
+
+**Why it doesn't work:**
+- No isolation between models (User vs Post)
+- Memory leaks in development mode (references to reloaded classes)
+- Thread-safety concerns
+
+---
+
+**❌ Alternative 3: Store in Instance Variables (Module Namespace Collision)**
+
+```ruby
+class User
+  @roles_data = {...}         # From Roles module
+  @pundit_data = {...}        # From Pundit module
+  @i18n_data = {...}          # From I18n module
+  @custom_module_data = {...} # From custom module
+end
+
+# Problems:
+# 1. What if two modules use the same variable name?
+# 2. How to cleanup when module is removed?
+# 3. No standardized API for accessing data
+```
+
+**Why it doesn't work:**
+- Risk of variable name collisions between modules
+- No centralized cleanup mechanism
+- Each module must invent its own storage pattern
+
+---
+
+**✅ Solution: Centralized Metadata Storage with Namespace Isolation**
+
+```ruby
+# Each module gets its own namespace in a centralized hash:
+User._module_metadata = {
+  roles: {                           # ← Namespace for Roles module
+    billing: {viewable_by: [:admin, :finance], editable_by: [:admin]},
+    profile: {viewable_by: [:user, :admin], editable_by: [:user]}
+  },
+  pundit: {                          # ← Namespace for Pundit module
+    billing: {policy: "BillingPolicy"}
+  },
+  i18n: {                            # ← Namespace for I18n module
+    billing: {locale: :en}
+  }
+}
+
+# Complete isolation between models via class_attribute:
+User._module_metadata   # ← Data only for User model
+Post._module_metadata   # ← Data only for Post model (separate hash)
+
+# No namespace collisions:
+ModuleRegistry.get_module_metadata(User, :roles)   # Only Roles data
+ModuleRegistry.get_module_metadata(User, :pundit)  # Only Pundit data
+```
+
+**Why it works:**
+- ✅ **Namespace isolation**: Each module has its own key (`:roles`, `:pundit`, `:i18n`)
+- ✅ **Model isolation**: Each model class has its own `_module_metadata` hash (via `class_attribute`)
+- ✅ **Centralized API**: Standardized `get_module_metadata` / `set_module_metadata` methods
+- ✅ **Clean separation**: User options in `setting.options`, processed data in Module Metadata
+
+---
+
+**Real Example: Roles Module Query Method**
+
+Here's how the Roles module uses Module Metadata to power `settings_viewable_by(:admin)`:
+
+```ruby
+# STEP 1: User defines settings
+class User < ApplicationRecord
+  include ModelSettings::Modules::Roles
+
+  setting :billing, viewable_by: [:admin, :finance]
+  setting :profile, viewable_by: [:user, :admin]
+end
+
+# STEP 2: on_setting_defined hook processes and stores data
+ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
+  next unless ModelSettings::ModuleRegistry.module_included?(:roles, model_class)
+
+  if setting.options.key?(:viewable_by)
+    # Normalize raw data: :all, "admin", [:admin] → normalized array
+    normalized = normalize_roles(setting.options[:viewable_by])
+
+    # Store in Module Metadata (NOT in setting.options!)
+    ModelSettings::ModuleRegistry.set_module_metadata(
+      model_class,
+      :roles,              # ← Module namespace
+      setting.name,
+      {viewable_by: normalized, editable_by: []}
+    )
+  end
+end
+
+# STEP 3: Query method uses Module Metadata
+module ClassMethods
+  def settings_viewable_by(role)
+    # Retrieve ALL stored metadata for this module
+    all_roles = get_module_metadata(:roles)
+    # => {
+    #   billing: {viewable_by: [:admin, :finance], editable_by: []},
+    #   profile: {viewable_by: [:user, :admin], editable_by: []}
+    # }
+
+    # Filter by role
+    all_roles.select do |_name, roles|
+      roles[:viewable_by].include?(role.to_sym)
+    end.keys
+    # => [:billing, :profile]  (both viewable by :admin)
+  end
+end
+
+# STEP 4: Application uses query method
+User.settings_viewable_by(:admin)
+# => [:billing, :profile]
+```
+
+**Key Distinction: Raw vs Processed Data**
+
+```ruby
+# RAW data (in setting.options - user input):
+setting.options[:viewable_by]
+# => [:admin, :finance]  OR  :all  OR  "admin"  (various formats)
+
+# PROCESSED data (in Module Metadata - normalized by module):
+ModuleRegistry.get_module_metadata(User, :roles, :billing)[:viewable_by]
+# => [:admin, :finance]  (always Array<Symbol> or :all)
+```
+
+Modules cannot store processed data in `setting.options` because:
+1. It would pollute the user's option namespace
+2. `setting.options` is for raw DSL input, not normalized results
+3. Multiple modules might process the same option differently
+
+---
+
+**When to Use Module Metadata**
+
+✅ **Use Module Metadata when you need to:**
+- Store processed/normalized option values
+- Build indexes for fast runtime queries (e.g., `settings_viewable_by(:admin)`)
+- Cache expensive computations done at definition-time
+- Provide query methods in `ClassMethods` that filter settings by option values
+
+❌ **Don't use Module Metadata for:**
+- Reading raw user input (use `setting.options[:my_option]` instead)
+- Temporary runtime state (use instance variables)
+- Inter-module communication (modules should be isolated)
+
+---
 
 #### `set_module_metadata(model_class, module_name, setting_name, metadata)`
 

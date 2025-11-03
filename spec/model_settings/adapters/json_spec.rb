@@ -794,5 +794,62 @@ RSpec.describe ModelSettings::Adapters::Json do
       end
     end
   end
+
+  describe "BooleanValueValidator integration" do
+    let(:validated_model_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ValidatedJsonModel"
+        end
+
+        include ModelSettings::DSL
+
+        setting :features, type: :json, storage: {column: :settings} do
+          setting :strict_mode
+        end
+
+        validates :strict_mode, boolean_value: true
+      end
+    end
+
+    # rubocop:disable RSpec/MultipleExpectations
+    it "accepts valid boolean values" do
+      instance = validated_model_class.new
+      instance.strict_mode = true
+      expect(instance).to be_valid
+
+      instance.strict_mode = false
+      expect(instance).to be_valid
+    end
+    # rubocop:enable RSpec/MultipleExpectations
+
+    it "rejects string '1'" do
+      instance = validated_model_class.new
+      instance.strict_mode = "1"
+      expect(instance).not_to be_valid
+      expect(instance.errors[:strict_mode]).to be_present
+    end
+
+    it "rejects string 'true'" do
+      instance = validated_model_class.new
+      instance.strict_mode = "true"
+      expect(instance).not_to be_valid
+      expect(instance.errors[:strict_mode]).to be_present
+    end
+
+    it "rejects integer 0" do
+      instance = validated_model_class.new
+      instance.strict_mode = 0
+      expect(instance).not_to be_valid
+      expect(instance.errors[:strict_mode]).to be_present
+    end
+
+    it "rejects integer 1" do
+      instance = validated_model_class.new
+      instance.strict_mode = 1
+      expect(instance).not_to be_valid
+      expect(instance.errors[:strict_mode]).to be_present
+    end
+  end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage, RSpecGuide/InvariantExamples
 end

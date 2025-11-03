@@ -98,6 +98,13 @@ module ModelSettings
         end
       end
 
+      # Register authorize_with as inheritable option with :replace strategy
+      # Child settings override parent policy (no inheritance of policy references)
+      ModelSettings::ModuleRegistry.register_inheritable_option(
+        :authorize_with,
+        merge_strategy: :replace
+      )
+
       # Hook to capture authorization metadata when settings are defined
       ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
         next unless ModelSettings::ModuleRegistry.module_included?(:action_policy, model_class)

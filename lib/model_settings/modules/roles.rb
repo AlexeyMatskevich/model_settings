@@ -86,6 +86,19 @@ module ModelSettings
         end
       end
 
+      # Register role options as inheritable with :append strategy
+      # This allows child settings to inherit and extend parent roles
+      # Example: parent viewable_by: [:admin], child viewable_by: [:manager]
+      #          => child inherits [:admin, :manager]
+      ModelSettings::ModuleRegistry.register_inheritable_option(
+        :viewable_by,
+        merge_strategy: :append
+      )
+      ModelSettings::ModuleRegistry.register_inheritable_option(
+        :editable_by,
+        merge_strategy: :append
+      )
+
       # Hook to capture role metadata when settings are defined
       ModelSettings::ModuleRegistry.on_setting_defined do |setting, model_class|
         next unless ModelSettings::ModuleRegistry.module_included?(:roles, model_class)

@@ -460,5 +460,66 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
       end
     end
   end
+
+  describe "BooleanValueValidator integration" do
+    let(:validated_model_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ValidatedColumnModel"
+        end
+
+        include ModelSettings::DSL
+
+        setting :enabled, type: :column
+        validates :enabled, boolean_value: true
+      end
+    end
+
+    context "with valid boolean values" do
+      it "accepts true" do
+        instance = validated_model_class.new(enabled: true)
+        expect(instance).to be_valid
+      end
+
+      it "accepts false" do
+        instance = validated_model_class.new(enabled: false)
+        expect(instance).to be_valid
+      end
+    end
+
+    context "with invalid string values" do
+      it "rejects string '1'" do
+        instance = validated_model_class.new(enabled: "1")
+        expect(instance).not_to be_valid
+        expect(instance.errors[:enabled]).to be_present
+      end
+
+      it "rejects string 'true'" do
+        instance = validated_model_class.new(enabled: "true")
+        expect(instance).not_to be_valid
+        expect(instance.errors[:enabled]).to be_present
+      end
+
+      it "rejects string 'yes'" do
+        instance = validated_model_class.new(enabled: "yes")
+        expect(instance).not_to be_valid
+        expect(instance.errors[:enabled]).to be_present
+      end
+    end
+
+    context "with invalid integer values" do
+      it "rejects integer 0" do
+        instance = validated_model_class.new(enabled: 0)
+        expect(instance).not_to be_valid
+        expect(instance.errors[:enabled]).to be_present
+      end
+
+      it "rejects integer 1" do
+        instance = validated_model_class.new(enabled: 1)
+        expect(instance).not_to be_valid
+        expect(instance.errors[:enabled]).to be_present
+      end
+    end
+  end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

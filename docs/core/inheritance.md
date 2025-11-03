@@ -158,6 +158,163 @@ premium.theme = "light"
 premium.save!
 ```
 
+## Option Inheritance in Nested Settings
+
+In addition to class inheritance, ModelSettings supports **option inheritance** where nested settings automatically inherit options from their parent settings.
+
+### How It Works
+
+When you define nested settings, child settings can automatically inherit specific options from their parent. This is particularly useful for authorization options like `viewable_by`, `editable_by`, and `authorize_with`.
+
+**Configuration**: Which options are inherited is controlled by [`inheritable_options`](configuration.md#inheritable_options) setting.
+
+### Basic Example
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  setting :billing, viewable_by: [:admin, :finance] do
+    setting :invoices   # Automatically inherits viewable_by: [:admin, :finance]
+    setting :reports    # Automatically inherits viewable_by: [:admin, :finance]
+  end
+end
+
+# Usage
+org = Organization.create!
+org.can_view_setting?(:invoices, :finance)  # => true (inherited from :billing)
+```
+
+### Multi-Level Option Inheritance
+
+Options inherit through multiple levels of nesting:
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  setting :billing,
+    viewable_by: [:admin, :finance],
+    editable_by: [:admin] do
+
+    setting :invoices do
+      # Inherits both: viewable_by: [:admin, :finance], editable_by: [:admin]
+
+      setting :tax_reports
+      # Also inherits from parent: viewable_by: [:admin, :finance], editable_by: [:admin]
+    end
+  end
+end
+```
+
+### Overriding Inherited Options
+
+Child settings can override inherited options:
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  setting :billing,
+    viewable_by: [:admin, :finance],
+    editable_by: [:admin] do
+
+    setting :invoices do
+      # Inherits both options
+    end
+
+    setting :payments, editable_by: [:finance] do
+      # Overrides editable_by, keeps viewable_by: [:admin, :finance]
+    end
+
+    setting :tax_reports, viewable_by: [:admin] do
+      # Overrides viewable_by, keeps editable_by: [:admin]
+    end
+  end
+end
+```
+
+### Which Options Are Inherited?
+
+By default, modules register their authorization options as inheritable:
+- **Roles module**: `:viewable_by`, `:editable_by`
+- **Pundit module**: `:authorize_with`
+- **ActionPolicy module**: `:authorize_with`
+
+You can configure which options are inherited globally or per-model. See [Configuration - inheritable_options](configuration.md#inheritable_options) for details.
+
+### Disabling Option Inheritance
+
+To prevent a nested setting from inheriting options, explicitly set them to `nil` or a different value:
+
+```ruby
+setting :billing, viewable_by: [:admin] do
+  setting :public_invoices, viewable_by: :all  # Override with :all
+  setting :internal_reports, viewable_by: nil  # Explicitly no restriction
+end
+```
+
+### Complete Example
+
+```ruby
+class Organization < ApplicationRecord
+  include ModelSettings::DSL
+  include ModelSettings::Modules::Roles
+
+  # Root setting with authorization
+  setting :billing,
+    viewable_by: [:admin, :finance, :manager],
+    editable_by: [:admin, :finance] do
+
+    # Level 1: Inherits both options
+    setting :invoices do
+      setting :summary  # Level 2: Also inherits both options
+    end
+
+    # Level 1: Overrides editable_by only
+    setting :payments, editable_by: [:admin] do
+      setting :history  # Level 2: Inherits overridden editable_by
+    end
+
+    # Level 1: Override viewable_by only
+    setting :reports, viewable_by: [:admin, :finance] do
+      # Manager can't view reports, but keeps editable_by: [:admin, :finance]
+    end
+  end
+end
+
+# Usage
+org = Organization.create!
+
+# Invoices: inherited from billing
+org.can_view_setting?(:invoices, :manager)   # => true
+org.can_edit_setting?(:invoices, :finance)   # => true
+
+# Payments: overridden editable_by
+org.can_view_setting?(:payments, :manager)   # => true (inherited)
+org.can_edit_setting?(:payments, :finance)   # => false (overridden)
+
+# Reports: overridden viewable_by
+org.can_view_setting?(:reports, :manager)    # => false (overridden)
+org.can_edit_setting?(:reports, :finance)    # => true (inherited)
+```
+
+### Important Notes
+
+1. **Option inheritance is separate from class inheritance** - these are two different mechanisms
+2. **Only configured options are inherited** - see `inheritable_options` configuration
+3. **Inheritance happens at definition time** - options are copied when settings are defined
+4. **Explicit always wins** - explicitly set options always override inherited ones
+
+### See Also
+
+- [Configuration - inheritable_options](configuration.md#inheritable_options) - Configure which options are inherited
+- [Roles Module](../modules/roles.md) - Uses option inheritance for authorization
+- [Pundit Module](../modules/policy_based/pundit.md) - Uses option inheritance for policies
+
 ## Disabling Inheritance
 
 Disable inheritance globally:
@@ -244,7 +401,7 @@ enterprise.white_label            # => true (from EnterpriseUser)
 
 ## Summary
 
-**Key Points**:
+**Class Inheritance** (parent class → child class):
 - Inheritance is enabled by default
 - Child classes get all parent settings
 - Override by redefining with same name
@@ -252,3 +409,11 @@ enterprise.white_label            # => true (from EnterpriseUser)
 - Works with all storage types
 - Multi-level inheritance supported
 - Metadata and options are inherited
+
+**Option Inheritance** (parent setting → nested setting):
+- Nested settings inherit options from parent settings
+- Controlled by `inheritable_options` configuration
+- Modules auto-register their options (viewable_by, editable_by, authorize_with)
+- Override by explicitly setting different value
+- Multi-level inheritance through deep nesting
+- Separate mechanism from class inheritance

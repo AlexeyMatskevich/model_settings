@@ -311,4 +311,170 @@ RSpec.describe ModelSettings::DeprecationAuditor do
       end
     end
   end
+
+  describe "#find_models_with_settings (private)" do
+    context "when Rails is defined" do
+      it "returns models that include ModelSettings::DSL" do
+        models = auditor.send(:find_models_with_settings)
+
+        expect(models).to all(respond_to(:settings))
+      end
+    end
+
+    context "but when Rails is not defined" do
+      it "returns empty array" do
+        # Temporarily hide Rails constant
+        rails_const = Object.send(:remove_const, :Rails) if defined?(Rails)
+
+        begin
+          models = auditor.send(:find_models_with_settings)
+          expect(models).to eq([])
+        ensure
+          Object.const_set(:Rails, rails_const) if rails_const
+        end
+      end
+    end
+  end
+
+  describe "#count_json_usage (private)" do
+    let(:json_model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "json_test_models"
+
+        def self.name
+          "JsonUsageModel"
+        end
+
+        include ModelSettings::DSL
+
+        setting :deprecated_json, type: :json, storage: {column: :settings_data}, deprecated: true
+      end
+    end
+
+    before do
+      ActiveRecord::Base.connection.create_table :json_test_models, force: true do |t|
+        t.json :settings_data
+      end
+
+      json_model_class.compile_settings!
+    end
+
+    after do
+      ActiveRecord::Base.connection.drop_table :json_test_models, if_exists: true
+    end
+
+    context "when column exists with JSON data" do
+      before do
+        # Create records with JSON data using raw SQL to bypass validations
+        ActiveRecord::Base.connection.execute(
+          "INSERT INTO json_test_models (settings_data) VALUES ('{\"deprecated_json\": \"value1\"}')"
+        )
+        ActiveRecord::Base.connection.execute(
+          "INSERT INTO json_test_models (settings_data) VALUES ('{\"deprecated_json\": \"value2\"}')"
+        )
+        ActiveRecord::Base.connection.execute(
+          "INSERT INTO json_test_models (settings_data) VALUES ('{}')"
+        )
+      end
+
+      it "counts records with the JSON key" do
+        setting = json_model_class.find_setting(:deprecated_json)
+        count = auditor.send(:count_json_usage, json_model_class, setting)
+
+        expect(count).to eq(2)
+      end
+    end
+
+    context "but when column does not exist" do
+      let(:invalid_setting) do
+        instance_double(
+          ModelSettings::Setting,
+          name: :test,
+          storage: {column: :nonexistent_column},
+          type: :json
+        )
+      end
+
+      it "returns 0" do
+        count = auditor.send(:count_json_usage, json_model_class, invalid_setting)
+
+        expect(count).to eq(0)
+      end
+    end
+
+    context "and when query fails" do
+      let(:failing_setting) do
+        setting = json_model_class.find_setting(:deprecated_json)
+        allow(json_model_class).to receive(:where).and_raise(StandardError.new("DB error"))
+        setting
+      end
+
+      it "returns 0 without raising" do
+        count = auditor.send(:count_json_usage, json_model_class, failing_setting)
+
+        expect(count).to eq(0)
+      end
+    end
+  end
+
+  describe "#count_store_model_usage (private)" do
+    let(:store_model_class) do
+      Class.new(ActiveRecord::Base) do
+        self.table_name = "store_test_models"
+
+        def self.name
+          "StoreUsageModel"
+        end
+
+        include ModelSettings::DSL
+
+        setting :deprecated_store, type: :store_model, storage: {column: :config_data}, deprecated: true
+      end
+    end
+
+    before do
+      ActiveRecord::Base.connection.create_table :store_test_models, force: true do |t|
+        t.json :config_data
+      end
+
+      store_model_class.compile_settings!
+    end
+
+    after do
+      ActiveRecord::Base.connection.drop_table :store_test_models, if_exists: true
+    end
+
+    context "when column has data" do
+      before do
+        # Create records with data in the column
+        ActiveRecord::Base.connection.execute(
+          "INSERT INTO store_test_models (config_data) VALUES ('{\"key\": \"value\"}')"
+        )
+        ActiveRecord::Base.connection.execute(
+          "INSERT INTO store_test_models (config_data) VALUES (NULL)"
+        )
+      end
+
+      it "counts records where column is not null" do
+        setting = store_model_class.find_setting(:deprecated_store)
+        count = auditor.send(:count_store_model_usage, store_model_class, setting)
+
+        expect(count).to eq(1)
+      end
+    end
+
+    context "but when query fails" do
+      let(:failing_setting) do
+        setting = store_model_class.find_setting(:deprecated_store)
+        allow(store_model_class).to receive(:where).and_raise(StandardError.new("DB error"))
+        setting
+      end
+
+      it "returns 0 without raising" do
+        count = auditor.send(:count_store_model_usage, store_model_class, failing_setting)
+
+        expect(count).to eq(0)
+      end
+    end
+  end
 end

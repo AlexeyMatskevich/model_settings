@@ -75,8 +75,8 @@ module ModelSettings
         end
 
         # Cascades
-        if setting.options[:cascade]
-          data["cascade"] = setting.options[:cascade].transform_keys(&:to_s)
+        if setting.cascade
+          data["cascade"] = setting.cascade.transform_keys(&:to_s)
         end
 
         # Syncs

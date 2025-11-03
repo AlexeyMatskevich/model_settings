@@ -210,7 +210,7 @@ module ModelSettings
       newly_changed = []
 
       changed_settings.each do |setting|
-        cascade_config = setting.options[:cascade]
+        cascade_config = setting.cascade
         next unless cascade_config
 
         # Handle enable cascade

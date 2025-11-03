@@ -567,6 +567,13 @@ RSpec.describe ModelSettings::Setting do
       described_class.merge_inherited_options(parent_options, child_options)
     end
 
+    before do
+      # Enable inheritance for metadata and cascade (they use auto_include: false)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:metadata, merge_strategy: :merge, auto_include: false)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:cascade, merge_strategy: :merge, auto_include: false)
+      ModelSettings.configuration.inheritable_options = [:metadata, :cascade]
+    end
+
     let(:parent_options) { {type: :json, default: false, metadata: {tier: "basic"}} }
 
     context "when child overrides simple option" do
@@ -606,6 +613,13 @@ RSpec.describe ModelSettings::Setting do
 
   describe "#all_inherited_options" do
     subject(:all_options) { child.all_inherited_options }
+
+    before do
+      # Enable inheritance for metadata and cascade (they use auto_include: false)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:metadata, merge_strategy: :merge, auto_include: false)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:cascade, merge_strategy: :merge, auto_include: false)
+      ModelSettings.configuration.inheritable_options = [:metadata, :cascade]
+    end
 
     context "when setting has no parent" do
       let(:child) { described_class.new(:root, {type: :column, default: false}) }

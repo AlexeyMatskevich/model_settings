@@ -14,12 +14,15 @@ module ModelSettings
   #   end
   class Configuration
     attr_accessor :default_modules, :inherit_authorization, :inherit_settings
+    attr_reader :inheritable_options
 
     def initialize
       @default_modules = []
       @inherit_authorization = true # Security by default
       @inherit_settings = true # Inheritance enabled by default
       @module_callbacks = {}
+      @inheritable_options = []
+      @inheritable_options_explicitly_set = false
     end
 
     # Configure callback for a specific module
@@ -47,12 +50,91 @@ module ModelSettings
     # @return [Hash] Hash of module name => callback name
     attr_reader :module_callbacks
 
+    # Set inheritable options explicitly
+    #
+    # When set explicitly by user, modules cannot auto-add their options.
+    # This gives users full control over which options are inherited.
+    #
+    # @param options [Array<Symbol>] List of option names that should be inherited
+    #
+    # @example
+    #   config.inheritable_options = [:viewable_by, :authorize_with]
+    #
+    def inheritable_options=(options)
+      @inheritable_options = options
+      @inheritable_options_explicitly_set = true
+    end
+
+    # Add an inheritable option (used by modules)
+    #
+    # Modules call this to automatically add their options to the inheritable list.
+    # If user has explicitly set inheritable_options, this method does nothing
+    # (user's explicit configuration takes precedence).
+    #
+    # @param option_name [Symbol] Name of the option to add
+    #
+    # @example In a module
+    #   ModelSettings.configuration.add_inheritable_option(:authorize_with)
+    #
+    def add_inheritable_option(option_name)
+      # If user explicitly set list - DON'T mutate
+      return if @inheritable_options_explicitly_set
+
+      # Add if not present
+      @inheritable_options << option_name unless @inheritable_options.include?(option_name)
+    end
+
+    # Check if inheritable_options was explicitly set by user
+    #
+    # @return [Boolean] true if user explicitly set the list
+    def inheritable_options_explicitly_set?
+      @inheritable_options_explicitly_set
+    end
+
+    # Get effective inheritable options (user config + module registrations)
+    #
+    # Returns the final list of options that should be inherited by child settings.
+    # If user explicitly set inheritable_options, only their list is used.
+    # Otherwise, merges config.inheritable_options + ModuleRegistry.registered_inheritable_options
+    #
+    # @return [Array<Symbol>] List of options that should be inherited
+    #
+    # @example User explicitly set (user wins)
+    #   config.inheritable_options = [:custom]
+    #   ModuleRegistry.register_inheritable_option(:viewable_by)
+    #   config.effective_inheritable_options
+    #   # => [:custom]  (ignores module registration)
+    #
+    # @example User did not set (merge both)
+    #   config.add_inheritable_option(:custom)
+    #   ModuleRegistry.register_inheritable_option(:viewable_by)
+    #   config.effective_inheritable_options
+    #   # => [:custom, :viewable_by]  (merges both)
+    #
+    def effective_inheritable_options
+      if @inheritable_options_explicitly_set
+        # User explicitly set - only their list
+        @inheritable_options
+      else
+        # Merge config + registered from modules (only those with auto_include: true)
+        all_options = @inheritable_options.dup
+        ModuleRegistry.registered_inheritable_options.each do |opt, config|
+          if config[:auto_include] && !all_options.include?(opt)
+            all_options << opt
+          end
+        end
+        all_options
+      end
+    end
+
     # Reset configuration to defaults
     def reset!
       @default_modules = []
       @inherit_authorization = true
       @inherit_settings = true
       @module_callbacks = {}
+      @inheritable_options = []
+      @inheritable_options_explicitly_set = false
     end
   end
 

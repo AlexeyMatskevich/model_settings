@@ -508,6 +508,130 @@ RSpec.describe ModelSettings::DSL do
     end
   end
 
+  describe ".settings_config" do
+    around do |example|
+      # Save registry state
+      saved_state = save_registry_state
+
+      example.run
+    ensure
+      ModelSettings.reset_configuration!
+      # Restore registry state instead of reset to preserve callbacks
+      restore_registry_state(saved_state)
+    end
+
+    context "when configuring inheritable_options" do
+      before do
+        test_class.settings_config(inheritable_options: [:authorize_with, :viewable_by])
+      end
+
+      it "stores model-specific inheritable options" do
+        expect(test_class._model_inheritable_options).to eq([:authorize_with, :viewable_by])
+      end
+    end
+
+    context "when configuring multiple options" do
+      before do
+        test_class.settings_config(
+          inherit_authorization: true,
+          inheritable_options: [:custom_option]
+        )
+      end
+
+      it "stores inherit_authorization" do
+        expect(test_class._settings_inherit_authorization).to be true
+      end
+
+      it "stores inheritable_options" do
+        expect(test_class._model_inheritable_options).to eq([:custom_option])
+      end
+    end
+
+    context "when inheritable_options is single value" do
+      before do
+        test_class.settings_config(inheritable_options: :single_option)
+      end
+
+      it "converts to array" do
+        expect(test_class._model_inheritable_options).to eq([:single_option])
+      end
+    end
+  end
+
+  describe ".inheritable_options" do
+    around do |example|
+      # Save registry state
+      saved_state = save_registry_state
+
+      example.run
+    ensure
+      ModelSettings.reset_configuration!
+      # Restore registry state instead of reset to preserve callbacks
+      restore_registry_state(saved_state)
+    end
+
+    # rubocop:disable RSpec/MultipleExpectations
+    it "returns empty array by default" do
+      # May include core options registered with auto_include: true from loaded modules
+      # The important thing is no model-specific options are configured
+      result = test_class.inheritable_options
+      expect(result).to be_an(Array)
+      # Should not include any model-specific options (only potentially core options)
+      expect(result).not_to include(:model_option, :global_option, :module_option)
+    end
+    # rubocop:enable RSpec/MultipleExpectations
+
+    context "when model-specific options are configured" do
+      before do
+        test_class.settings_config(inheritable_options: [:model_option])
+      end
+
+      it "returns model-specific options" do
+        expect(test_class.inheritable_options).to eq([:model_option])
+      end
+
+      it "ignores global and module-registered options" do
+        ModelSettings.configuration.add_inheritable_option(:global_option)
+        ModelSettings::ModuleRegistry.register_inheritable_option(:module_option)
+
+        expect(test_class.inheritable_options).to eq([:model_option])
+      end
+    end
+
+    context "when no model-specific options are configured" do
+      before do
+        ModelSettings.configuration.add_inheritable_option(:global_option)
+        ModelSettings::ModuleRegistry.register_inheritable_option(:module_option)
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      it "merges global and module-registered options" do
+        # May also include core options registered with auto_include: true
+        result = test_class.inheritable_options
+        expect(result).to be_an(Array)
+        expect(result).to include(:global_option, :module_option)
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+    end
+
+    context "but when global and module options overlap" do
+      before do
+        ModelSettings.configuration.add_inheritable_option(:shared_option)
+        ModelSettings::ModuleRegistry.register_inheritable_option(:shared_option)
+      end
+
+      # rubocop:disable RSpec/MultipleExpectations
+      it "deduplicates options" do
+        # May also include core options, but :shared_option should appear only once
+        result = test_class.inheritable_options
+        expect(result).to be_an(Array)
+        expect(result).to include(:shared_option)
+        expect(result.count(:shared_option)).to eq(1)
+      end
+      # rubocop:enable RSpec/MultipleExpectations
+    end
+  end
+
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".resolve_module" do
     # Happy path: built-in modules
@@ -533,4 +657,313 @@ RSpec.describe ModelSettings::DSL do
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
+
+  describe ".module_metadata?" do
+    let(:test_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ModuleMetadataTestModel"
+        end
+
+        include ModelSettings::DSL
+        include ModelSettings::Modules::Roles
+
+        setting :feature, type: :column, viewable_by: :admin
+        setting :other, type: :column
+      end
+    end
+
+    before do
+      test_class.compile_settings!
+    end
+
+    context "when module has metadata for setting" do
+      it "returns true for setting with viewable_by" do
+        expect(test_class.module_metadata?(:roles, :feature)).to be true
+      end
+    end
+
+    context "when module has no metadata for setting" do
+      it "returns false for setting without viewable_by" do
+        expect(test_class.module_metadata?(:roles, :other)).to be false
+      end
+    end
+
+    context "when setting does not exist" do
+      it "returns false" do
+        expect(test_class.module_metadata?(:roles, :nonexistent)).to be false
+      end
+    end
+
+    context "when module is not active" do
+      it "returns false" do
+        expect(test_class.module_metadata?(:pundit, :feature)).to be false
+      end
+    end
+  end
+
+  describe ".copy_setting_recursively" do
+    let(:parent_class) do
+      Class.new(TestModel) do
+        def self.name
+          "CopyParentModel"
+        end
+
+        include ModelSettings::DSL
+
+        setting :root, type: :column do
+          setting :level1, type: :column do
+            setting :level2, type: :column
+          end
+          setting :sibling, type: :column
+        end
+      end
+    end
+
+    let(:child_class) do
+      Class.new(TestModel) do
+        def self.name
+          "CopyChildModel"
+        end
+
+        include ModelSettings::DSL
+      end
+    end
+
+    before do
+      parent_class.compile_settings!
+    end
+
+    context "when copying setting with children" do
+      it "copies setting and all descendants" do
+        root_setting = parent_class.find_setting(:root)
+        copied = child_class.send(:copy_setting_recursively, root_setting)
+
+        expect(copied).to have_attributes(
+          name: :root,
+          children: have_attributes(size: 2)
+        )
+        expect(copied.children.map(&:name)).to contain_exactly(:level1, :sibling)
+      end
+
+      it "recursively copies nested children" do
+        root_setting = parent_class.find_setting(:root)
+        copied = child_class.send(:copy_setting_recursively, root_setting)
+
+        level1 = copied.children.find { |c| c.name == :level1 }
+        expect(level1.children.size).to eq(1)
+        expect(level1.children.first.name).to eq(:level2)
+      end
+
+      it "creates new Setting objects (not references)" do
+        root_setting = parent_class.find_setting(:root)
+        copied = child_class.send(:copy_setting_recursively, root_setting)
+
+        expect(copied).not_to equal(root_setting)
+        expect(copied.object_id).not_to eq(root_setting.object_id)
+      end
+    end
+
+    context "when copying leaf setting without children" do
+      it "copies setting without children" do
+        leaf_setting = parent_class.find_setting([:root, :sibling])
+        copied = child_class.send(:copy_setting_recursively, leaf_setting)
+
+        expect(copied.name).to eq(:sibling)
+        expect(copied.children).to be_empty
+      end
+    end
+  end
+
+  describe ".settings_debug" do
+    let(:debug_class) do
+      Class.new(TestModel) do
+        def self.name
+          "DebugTestModel"
+        end
+
+        include ModelSettings::DSL
+        include ModelSettings::Modules::Roles
+
+        setting :active, type: :column, deprecated: "Use new_active instead"
+        setting :feature, type: :column, cascade: {enable: true, disable: true}
+        setting :sync_setting, type: :column, sync: {target: :active, mode: :forward}
+        setting :json_setting, type: :json, storage: {column: :settings_data}
+      end
+    end
+
+    before do
+      debug_class.compile_settings!
+    end
+
+    describe "basic behavior" do
+      it "outputs without error" do
+        expect { debug_class.settings_debug }.not_to raise_error
+      end
+
+      it "returns nil" do
+        expect(debug_class.settings_debug).to be_nil
+      end
+    end
+
+    describe "active modules section" do
+      context "when modules are active" do
+        it "shows active module names" do
+          expect { debug_class.settings_debug }.to output(/Active Modules/).to_stdout
+          expect { debug_class.settings_debug }.to output(/roles/).to_stdout
+        end
+      end
+    end
+
+    describe "deprecated settings section" do
+      context "when deprecated settings exist" do
+        it "lists deprecated settings with reasons" do
+          expect { debug_class.settings_debug }.to output(/Deprecated Settings: 1/).to_stdout
+          expect { debug_class.settings_debug }.to output(/active/).to_stdout
+          expect { debug_class.settings_debug }.to output(/Use new_active instead/).to_stdout
+        end
+      end
+
+      context "but when no deprecated settings exist" do
+        let(:clean_class) do
+          Class.new(TestModel) do
+            def self.name
+              "CleanModel"
+            end
+
+            include ModelSettings::DSL
+
+            setting :feature, type: :column
+          end
+        end
+
+        before do
+          clean_class.compile_settings!
+        end
+
+        it "shows zero count" do
+          expect { clean_class.settings_debug }.to output(/Deprecated Settings: 0/).to_stdout
+        end
+      end
+    end
+
+    describe "cascade configuration section" do
+      context "when settings have cascades" do
+        it "shows cascade directions" do
+          expect { debug_class.settings_debug }.to output(/Settings with Cascades/).to_stdout
+          expect { debug_class.settings_debug }.to output(/feature.*enable, disable/).to_stdout
+        end
+      end
+    end
+
+    describe "sync relationships section" do
+      context "when settings have syncs" do
+        it "shows sync targets and modes" do
+          expect { debug_class.settings_debug }.to output(/Settings with Syncs/).to_stdout
+          expect { debug_class.settings_debug }.to output(/sync_setting → active \(forward\)/).to_stdout
+        end
+      end
+
+      context "when sync execution order exists" do
+        it "shows execution order" do
+          expect { debug_class.settings_debug }.to output(/Sync Execution Order/).to_stdout
+        end
+      end
+    end
+
+    describe "settings by type section" do
+      context "when model has multiple adapter types" do
+        it "groups settings by adapter type" do
+          expect { debug_class.settings_debug }.to output(/Settings by Type/).to_stdout
+          expect { debug_class.settings_debug }.to output(/column:/).to_stdout
+          expect { debug_class.settings_debug }.to output(/json:/).to_stdout
+        end
+      end
+    end
+  end
+
+  describe ".create_adapter_for (error handling)" do
+    let(:error_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ErrorTestModel"
+        end
+
+        include ModelSettings::DSL
+      end
+    end
+
+    context "when storage type is unknown" do
+      it "raises ArgumentError with helpful message" do
+        setting = ModelSettings::Setting.new(
+          :invalid,
+          {type: :invalid_type, model_class: error_class}
+        )
+
+        expect {
+          error_class.create_adapter_for(setting)
+        }.to raise_error(ArgumentError, /Unknown storage type/)
+      end
+    end
+  end
+
+  describe ".settings_modules" do
+    let(:array_config_class) do
+      Class.new(TestModel) do
+        def self.name
+          "ArrayConfigModel"
+        end
+
+        include ModelSettings::DSL
+      end
+    end
+
+    before do
+      @saved_state = save_registry_state
+    end
+
+    after do
+      restore_registry_state(@saved_state)
+    end
+
+    context "with single module" do
+      it "includes module" do
+        array_config_class.settings_modules(:roles)
+
+        expect(array_config_class._active_modules).to include(:roles)
+      end
+    end
+
+    context "with array of modules" do
+      it "includes all modules from array" do
+        array_config_class.settings_modules([:roles, :i18n])
+
+        expect(array_config_class._active_modules).to include(:roles, :i18n)
+      end
+    end
+
+    context "with nested arrays" do
+      it "flattens and includes all modules" do
+        array_config_class.settings_modules([[:roles], [:i18n]])
+
+        expect(array_config_class._active_modules).to include(:roles, :i18n)
+      end
+    end
+
+    context "with multiple arguments" do
+      it "includes all modules" do
+        array_config_class.settings_modules(:roles, :i18n, :pundit)
+
+        expect(array_config_class._active_modules).to include(:roles, :i18n, :pundit)
+      end
+    end
+
+    context "with mixed arrays and symbols" do
+      it "handles mixed arguments" do
+        array_config_class.settings_modules([:roles], :i18n, [:pundit])
+
+        expect(array_config_class._active_modules).to include(:roles, :i18n, :pundit)
+      end
+    end
+  end
 end

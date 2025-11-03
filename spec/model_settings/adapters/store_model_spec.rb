@@ -605,5 +605,56 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     end
     # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
   end
+
+  describe "BooleanValueValidator integration" do
+    # StoreModel adapter uses delegated attributes from StoreModel classes
+    # For this test, we'll use a simple AiSettings StoreModel
+    before do
+      StoreModelTestModel.setting :transcription,
+        type: :store_model,
+        storage: {column: :ai_settings}
+
+      StoreModelTestModel.validates :transcription, boolean_value: true
+    end
+
+    # rubocop:disable RSpec/MultipleExpectations
+    it "accepts valid boolean values" do
+      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+      instance.transcription = true
+      expect(instance).to be_valid
+
+      instance.transcription = false
+      expect(instance).to be_valid
+    end
+    # rubocop:enable RSpec/MultipleExpectations
+
+    it "rejects string '1'" do
+      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+      instance.transcription = "1"
+      expect(instance).not_to be_valid
+      expect(instance.errors[:transcription]).to be_present
+    end
+
+    it "rejects string 'true'" do
+      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+      instance.transcription = "true"
+      expect(instance).not_to be_valid
+      expect(instance.errors[:transcription]).to be_present
+    end
+
+    it "rejects integer 0" do
+      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+      instance.transcription = 0
+      expect(instance).not_to be_valid
+      expect(instance.errors[:transcription]).to be_present
+    end
+
+    it "rejects integer 1" do
+      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+      instance.transcription = 1
+      expect(instance).not_to be_valid
+      expect(instance.errors[:transcription]).to be_present
+    end
+  end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 end

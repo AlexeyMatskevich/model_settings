@@ -53,7 +53,7 @@ module ModelSettings
         next unless ModelSettings::ModuleRegistry.module_included?(:simple_audit, model_class)
 
         # Build index of tracked settings using centralized metadata
-        tracked = settings.select { |s| s.track_changes == true }.map(&:name)
+        tracked = settings.select { |s| s.get_option(:track_changes) == true }.map(&:name)
 
         # Store in centralized metadata instead of class_attribute
         ModelSettings::ModuleRegistry.set_module_metadata(

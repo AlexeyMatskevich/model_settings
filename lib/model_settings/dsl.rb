@@ -38,6 +38,10 @@ module ModelSettings
       # Track if settings have been compiled
       class_attribute :_settings_compiled, default: false
 
+      # Model-specific inheritable options configuration
+      # When set, these options will be inherited by nested settings in this model
+      class_attribute :_model_inheritable_options, default: nil
+
       # Track active modules for this model using symbols
       #
       # This uses symbol-based tracking instead of Module object references
@@ -514,7 +518,15 @@ module ModelSettings
       # @param options [Hash] Configuration options
       # @option options [Boolean] :inherit_authorization Whether to inherit authorization settings
       # @option options [Array<Symbol>] :modules Additional modules to include
+      # @option options [Array<Symbol>] :inheritable_options Options that should be inherited by nested settings
       # @return [void]
+      #
+      # @example Configure inheritance and modules
+      #   settings_config inherit_authorization: true, modules: [:pundit, :i18n]
+      #
+      # @example Configure inheritable options
+      #   settings_config inheritable_options: [:authorize_with, :viewable_by]
+      #
       def settings_config(**options)
         options.each do |key, value|
           case key
@@ -523,6 +535,9 @@ module ModelSettings
           when :inherit_authorization
             # Store for later use by authorization modules
             class_attribute :_settings_inherit_authorization, default: value
+          when :inheritable_options
+            # Store model-specific inheritable options
+            self._model_inheritable_options = Array(value)
           end
         end
       end
@@ -533,6 +548,32 @@ module ModelSettings
       # @return [void]
       def settings_modules(*module_names)
         module_names.flatten.each { |mod| settings_add_module(mod) }
+      end
+
+      # Get effective inheritable options for this model
+      #
+      # Returns merged list of inheritable options from three sources:
+      # 1. Global configuration (ModelSettings.configuration.inheritable_options)
+      # 2. Module-registered options (ModuleRegistry.registered_inheritable_options)
+      # 3. Model-specific configuration (_model_inheritable_options)
+      #
+      # Priority: Model-specific > Module-registered > Global
+      #
+      # @return [Array<Symbol>] List of option names that should be inherited
+      #
+      # @example
+      #   User.inheritable_options
+      #   # => [:authorize_with, :viewable_by, :editable_by]
+      #
+      def inheritable_options
+        # Start with model-specific if set (highest priority)
+        return _model_inheritable_options.dup if _model_inheritable_options
+
+        # Otherwise merge global + module-registered
+        global_options = ModelSettings.configuration.inheritable_options
+        module_options = ModelSettings::ModuleRegistry.registered_inheritable_options.keys
+
+        (global_options + module_options).uniq
       end
 
       # Debug helper: Print comprehensive settings information
@@ -591,11 +632,11 @@ module ModelSettings
         puts
 
         # Cascades
-        cascaded = all_settings_recursive.select { |s| s.options[:cascade] }
+        cascaded = all_settings_recursive.select { |s| s.cascade }
         puts "Settings with Cascades: #{cascaded.count}"
         if cascaded.any?
           cascaded.each do |setting|
-            config = setting.options[:cascade]
+            config = setting.cascade
             modes = []
             modes << "enable" if config[:enable]
             modes << "disable" if config[:disable]

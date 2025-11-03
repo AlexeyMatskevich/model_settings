@@ -99,13 +99,6 @@ module ModelSettings
       @options[:description]
     end
 
-    # Get the cascade configuration
-    #
-    # @return [Hash, nil] Cascade configuration with :enable and :disable keys, or nil if not configured
-    def cascade
-      @options[:cascade]
-    end
-
     # Get the sync configuration
     #
     # @return [Hash, nil] Sync configuration with :mode and :target keys
@@ -136,9 +129,11 @@ module ModelSettings
 
     # Get custom metadata
     #
+    # Includes inherited metadata from parent settings if inheritance is enabled.
+    #
     # @return [Hash] Metadata hash
     def metadata
-      @options.fetch(:metadata, {})
+      all_inherited_options.fetch(:metadata, {})
     end
 
     # Check if setting has a metadata key
@@ -186,6 +181,19 @@ module ModelSettings
     def metadata_includes?(key, value)
       meta_value = metadata_value(key)
       meta_value.is_a?(Array) && meta_value.include?(value)
+    end
+
+    # Get cascade configuration
+    #
+    # Includes inherited cascade config from parent settings if inheritance is enabled.
+    #
+    # @return [Hash, nil] Cascade configuration hash or nil
+    #
+    # @example
+    #   setting.cascade #=> {enable: true, disable: false}
+    #
+    def cascade
+      all_inherited_options[:cascade]
     end
 
     # Get the path from root to this setting
@@ -313,31 +321,118 @@ module ModelSettings
 
     # Deep merge options for inheritance
     #
-    # Merges parent options with child options, with child taking precedence.
-    # Handles special cases like metadata which should be merged, not replaced.
+    # Merges parent options with child options using configured merge strategies.
+    # The merge strategy for each option is looked up from ModuleRegistry.
     #
     # @param parent_options [Hash] Parent setting options
     # @param child_options [Hash] Child setting options
     # @return [Hash] Merged options
+    #
+    # @see ModelSettings::ModuleRegistry.register_inheritable_option
+    # @see ModelSettings::ModuleRegistry.merge_strategy_for
     def self.merge_inherited_options(parent_options, child_options)
       merged = parent_options.dup
+      effective_list = ModelSettings.configuration.effective_inheritable_options
 
       child_options.each do |key, value|
-        merged[key] = case key
-        when :metadata
-          # Deep merge metadata
-          (merged[key] || {}).merge(value)
-        when :cascade
-          # Deep merge cascade configuration
-          (merged[key] || {}).merge(value)
+        # Check if this option should be inherited
+        if effective_list.include?(key)
+          # Should inherit - apply merge strategy
+          strategy = ModuleRegistry.merge_strategy_for(key) || :replace
+
+          merged[key] = apply_merge_strategy(
+            strategy: strategy,
+            parent_value: merged[key],
+            child_value: value,
+            option_name: key
+          )
         else
-          # Simple override for other options
-          value
+          # Should NOT inherit - child value only (replace)
+          merged[key] = value
         end
       end
 
       merged
     end
+
+    # Apply merge strategy to combine parent and child values
+    #
+    # @param strategy [Symbol] Merge strategy (:replace, :append, :merge)
+    # @param parent_value [Object] Value from parent setting
+    # @param child_value [Object] Value from child setting
+    # @param option_name [Symbol] Option name (for error messages)
+    # @return [Object] Merged value
+    # @raise [ArgumentError] if type mismatch for :append or :merge
+    #
+    # @api private
+    def self.apply_merge_strategy(strategy:, parent_value:, child_value:, option_name:)
+      case strategy
+      when :replace
+        # Child value completely replaces parent value
+        child_value
+
+      when :append
+        # Concatenate arrays (parent + child)
+        # Both values must be Arrays (or nil)
+        validate_array_merge!(parent_value, child_value, option_name)
+        Array(parent_value) + Array(child_value)
+
+      when :merge
+        # Merge hashes (child keys override parent keys)
+        # Both values must be Hashes (or nil)
+        validate_hash_merge!(parent_value, child_value, option_name)
+        (parent_value || {}).merge(child_value || {})
+
+      else
+        raise ArgumentError,
+          "Unknown merge strategy: #{strategy.inspect} for option :#{option_name}"
+      end
+    end
+    private_class_method :apply_merge_strategy
+
+    # Validate that values can be merged as arrays
+    #
+    # @param parent_value [Object] Parent value
+    # @param child_value [Object] Child value
+    # @param option_name [Symbol] Option name for error message
+    # @raise [ArgumentError] if values are not arrays (or nil)
+    #
+    # @api private
+    def self.validate_array_merge!(parent_value, child_value, option_name)
+      # Both values must be Arrays or nil
+      parent_valid = parent_value.nil? || parent_value.is_a?(Array)
+      child_valid = child_value.nil? || child_value.is_a?(Array)
+
+      return if parent_valid && child_valid
+
+      raise ArgumentError,
+        "Cannot use :append merge strategy for :#{option_name} - " \
+        "parent value is #{parent_value.class}, child value is #{child_value.class}. " \
+        "Both must be Arrays (or nil)."
+    end
+    private_class_method :validate_array_merge!
+
+    # Validate that values can be merged as hashes
+    #
+    # @param parent_value [Object] Parent value
+    # @param child_value [Object] Child value
+    # @param option_name [Symbol] Option name for error message
+    # @raise [ArgumentError] if values are not hashes (or nil)
+    #
+    # @api private
+    def self.validate_hash_merge!(parent_value, child_value, option_name)
+      # Both values must be Hashes or nil
+      parent_valid = parent_value.nil? || parent_value.is_a?(Hash)
+      child_valid = child_value.nil? || child_value.is_a?(Hash)
+
+      return if parent_valid && child_valid
+
+      raise ArgumentError,
+        "Cannot use :merge merge strategy for :#{option_name} - " \
+        "parent value is #{parent_value.class}, child value is #{child_value.class}. " \
+        "Both must be Hashes (or nil)."
+    end
+    private_class_method :validate_hash_merge!
 
     # Get all inheritable option values (including from parent chain)
     #

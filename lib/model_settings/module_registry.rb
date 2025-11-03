@@ -517,6 +517,87 @@ module ModelSettings
         @query_methods ||= {}
       end
 
+      # Register an inheritable option with merge strategy
+      #
+      # Modules call this to declare which options can be inherited and how
+      # they should be merged when child settings inherit from parent settings.
+      #
+      # @param option_name [Symbol] Name of the option
+      # @param merge_strategy [Symbol] How to merge parent and child values:
+      #   - `:replace` (default) - Child value replaces parent value
+      #   - `:append` - Arrays are concatenated (parent + child)
+      #   - `:merge` - Hashes are merged (child keys override parent)
+      #
+      # @example Register with default :replace strategy
+      #   ModelSettings::ModuleRegistry.register_inheritable_option(:authorize_with)
+      #
+      # @example Register with :append strategy for role hierarchies
+      #   ModelSettings::ModuleRegistry.register_inheritable_option(
+      #     :viewable_by,
+      #     merge_strategy: :append
+      #   )
+      #
+      # @example Register with :merge strategy for configuration hashes
+      #   ModelSettings::ModuleRegistry.register_inheritable_option(
+      #     :metadata,
+      #     merge_strategy: :merge
+      #   )
+      #
+      def register_inheritable_option(option_name, merge_strategy: :replace, auto_include: true)
+        validate_merge_strategy!(merge_strategy)
+        registered_inheritable_options[option_name] = {
+          merge_strategy: merge_strategy,
+          auto_include: auto_include
+        }
+      end
+
+      # Check if an option is registered as inheritable
+      #
+      # @param option_name [Symbol] Option name to check
+      # @return [Boolean] true if option is registered as inheritable
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.inheritable_option?(:authorize_with)
+      #   # => true
+      #
+      def inheritable_option?(option_name)
+        registered_inheritable_options.key?(option_name)
+      end
+
+      # Get merge strategy for an inheritable option
+      #
+      # @param option_name [Symbol] Option name
+      # @return [Symbol, nil] Merge strategy (:replace, :append, :merge) or nil if not registered
+      #
+      # @example
+      #   ModelSettings::ModuleRegistry.merge_strategy_for(:viewable_by)
+      #   # => :append
+      #
+      def merge_strategy_for(option_name)
+        config = registered_inheritable_options[option_name]
+        config&.dig(:merge_strategy)
+      end
+
+      # Get all registered inheritable options
+      #
+      # Returns a Hash mapping option names to their configuration.
+      # To get just the option names (backwards compatibility), use `.keys`.
+      #
+      # @return [Hash] Hash of option_name => {merge_strategy: Symbol}
+      #
+      # @example Get full configuration
+      #   ModelSettings::ModuleRegistry.registered_inheritable_options
+      #   # => {:authorize_with => {merge_strategy: :replace},
+      #   #     :viewable_by => {merge_strategy: :append}}
+      #
+      # @example Get just option names (backwards compatibility)
+      #   ModelSettings::ModuleRegistry.registered_inheritable_options.keys
+      #   # => [:authorize_with, :viewable_by, :editable_by]
+      #
+      def registered_inheritable_options
+        @registered_inheritable_options ||= {}
+      end
+
       # Reset the registry (useful for testing)
       def reset!
         @modules = {}
@@ -528,6 +609,22 @@ module ModelSettings
         @after_change_hooks = []
         @module_callback_configs = {}
         @query_methods = {}
+        @registered_inheritable_options = {}
+      end
+
+      private
+
+      # Validate merge strategy
+      #
+      # @param strategy [Symbol] Merge strategy to validate
+      # @raise [ArgumentError] if strategy is invalid
+      def validate_merge_strategy!(strategy)
+        valid_strategies = [:replace, :append, :merge]
+        return if valid_strategies.include?(strategy)
+
+        raise ArgumentError,
+          "Invalid merge strategy: #{strategy.inspect}. " \
+          "Valid strategies are: #{valid_strategies.map(&:inspect).join(", ")}"
       end
     end
   end

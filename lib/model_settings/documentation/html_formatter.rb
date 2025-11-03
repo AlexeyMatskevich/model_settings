@@ -184,7 +184,7 @@ module ModelSettings
         html << "  </div>"
 
         # Cascades
-        if setting.options[:cascade]
+        if setting.cascade
           html << format_cascade_html(setting)
         end
 
@@ -223,7 +223,7 @@ module ModelSettings
       # @param setting [Setting] The setting
       # @return [String] HTML
       def format_cascade_html(setting)
-        cascade = setting.options[:cascade]
+        cascade = setting.cascade
         html = []
         html << "<div class=\"cascade\">"
         html << "  <strong>Cascades:</strong>"

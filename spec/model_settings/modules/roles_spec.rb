@@ -4,8 +4,16 @@ require "spec_helper"
 
 # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::Modules::Roles do
-  # Ensure module is registered (in case other tests reset the registry)
+  # Ensure module and its options are registered (in case other tests reset the registry)
   before do
+    # Always ensure options are registered (they might be missing even if module is registered)
+    unless ModelSettings::ModuleRegistry.inheritable_option?(:viewable_by)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:viewable_by, merge_strategy: :append)
+    end
+    unless ModelSettings::ModuleRegistry.inheritable_option?(:editable_by)
+      ModelSettings::ModuleRegistry.register_inheritable_option(:editable_by, merge_strategy: :append)
+    end
+    # Ensure module is registered
     unless ModelSettings::ModuleRegistry.module_registered?(:roles)
       ModelSettings::ModuleRegistry.register_module(:roles, described_class)
       ModelSettings::ModuleRegistry.register_exclusive_group(:authorization, :roles)

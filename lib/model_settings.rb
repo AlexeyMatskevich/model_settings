@@ -33,6 +33,12 @@ module ModelSettings
   class Error < StandardError; end
   class CyclicSyncError < Error; end
 
+  # Register merge strategies for core options (opt-in inheritance)
+  # These options are NOT auto-included in inheritable_options by default.
+  # Users must explicitly add them to config.inheritable_options if they want inheritance.
+  ModuleRegistry.register_inheritable_option(:metadata, merge_strategy: :merge, auto_include: false)
+  ModuleRegistry.register_inheritable_option(:cascade, merge_strategy: :merge, auto_include: false)
+
   # Register authorization modules
   ModuleRegistry.register_module(:roles, Modules::Roles)
   ModuleRegistry.register_module(:pundit, Modules::Pundit)
