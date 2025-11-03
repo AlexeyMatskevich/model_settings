@@ -50,3 +50,10 @@ end
 ```
 
 See full README for complete examples and nested settings with role inheritance.
+
+## See Also
+
+- [Module Development Guide](../guides/module_development.md) - Learn how to create custom modules like Roles
+- [ModuleRegistry API Reference](../api/module_registry.md) - Complete API documentation
+- [Custom Module Example](../../examples/custom_module/) - Working example of a custom module
+- [Configuration Guide](../core/configuration.md) - Global configuration options

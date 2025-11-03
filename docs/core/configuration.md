@@ -200,14 +200,14 @@ Configure when a module's logic runs in the Rails lifecycle (Sprint 11 Phase 3).
 
 ```ruby
 ModelSettings.configure do |config|
-  # Configure runtime modules
-  config.module_callback(:simple_audit, :after_commit)
+  # Configure runtime modules (custom modules only)
+  config.module_callback(:audit_trail, :after_commit)
   config.module_callback(:workflow, :before_save)
 end
 ```
 
 **Parameters:**
-- `module_name` (Symbol) - Module identifier (e.g., `:simple_audit`, `:workflow`)
+- `module_name` (Symbol) - Module identifier (e.g., `:audit_trail`, `:workflow`)
 - `callback_name` (Symbol) - Rails callback (e.g., `:before_validation`, `:before_save`, `:after_commit`)
 
 **Which Modules Use This?**
@@ -217,8 +217,6 @@ end
 - Workflow modules - State machine transitions
 - Notification modules - Send alerts after changes
 - Custom modules that need to run code when settings change
-
-**Example**: `SimpleAudit` module (included as demonstration)
 
 ❌ **Built-in modules that DON'T use this** (compile-time only):
 - `Roles` - Only stores metadata at definition time
@@ -253,7 +251,7 @@ class UsersController < ApplicationController
 end
 ```
 
-Runtime modules like SimpleAudit need to execute code when the model saves, so they benefit from configurable callback timing.
+Runtime modules (like custom audit logging or workflow modules) need to execute code when the model saves, so they benefit from configurable callback timing.
 
 **See Also:** [Policy-Based Authorization](../modules/policy_based/README.md), [Pundit Module](../modules/policy_based/pundit.md), [ActionPolicy Module](../modules/policy_based/action_policy.md)
 

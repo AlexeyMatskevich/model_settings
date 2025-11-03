@@ -475,7 +475,9 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with valid boolean values" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "accepts true" do
         instance = validated_model_class.new(enabled: true)
         expect(instance).to be_valid
@@ -487,37 +489,51 @@ RSpec.describe ModelSettings::Adapters::Column, type: :model do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with invalid string values" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "rejects string '1'" do
-        instance = validated_model_class.new(enabled: "1")
-        expect(instance).not_to be_valid
-        expect(instance.errors[:enabled]).to be_present
+        aggregate_failures do
+          instance = validated_model_class.new(enabled: "1")
+          expect(instance).not_to be_valid
+          expect(instance.errors[:enabled]).to be_present
+        end
       end
 
       it "rejects string 'true'" do
-        instance = validated_model_class.new(enabled: "true")
-        expect(instance).not_to be_valid
-        expect(instance.errors[:enabled]).to be_present
+        aggregate_failures do
+          instance = validated_model_class.new(enabled: "true")
+          expect(instance).not_to be_valid
+          expect(instance.errors[:enabled]).to be_present
+        end
       end
 
       it "rejects string 'yes'" do
-        instance = validated_model_class.new(enabled: "yes")
-        expect(instance).not_to be_valid
-        expect(instance.errors[:enabled]).to be_present
+        aggregate_failures do
+          instance = validated_model_class.new(enabled: "yes")
+          expect(instance).not_to be_valid
+          expect(instance.errors[:enabled]).to be_present
+        end
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with invalid integer values" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "rejects integer 0" do
-        instance = validated_model_class.new(enabled: 0)
-        expect(instance).not_to be_valid
-        expect(instance.errors[:enabled]).to be_present
+        aggregate_failures do
+          instance = validated_model_class.new(enabled: 0)
+          expect(instance).not_to be_valid
+          expect(instance.errors[:enabled]).to be_present
+        end
       end
 
       it "rejects integer 1" do
-        instance = validated_model_class.new(enabled: 1)
-        expect(instance).not_to be_valid
-        expect(instance.errors[:enabled]).to be_present
+        aggregate_failures do
+          instance = validated_model_class.new(enabled: 1)
+          expect(instance).not_to be_valid
+          expect(instance.errors[:enabled]).to be_present
+        end
       end
     end
   end

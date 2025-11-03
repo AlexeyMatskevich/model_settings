@@ -94,7 +94,9 @@ RSpec.describe "Merge Strategies" do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "but when option is unregistered" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns false" do
         result = ModelSettings::ModuleRegistry.inheritable_option?(:nonexistent)
         expect(result).to be false

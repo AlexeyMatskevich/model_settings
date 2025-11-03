@@ -5,13 +5,10 @@ require "spec_helper"
 # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
 RSpec.describe ModelSettings::ModuleRegistry do
   # Use RegistryStateHelper to properly save and restore all state
-  before do
-    @saved_state = save_registry_state
-  end
-
-  # Restore original state after each test
-  after do
-    restore_registry_state(@saved_state)
+  around do |example|
+    saved_state = save_registry_state
+    example.run
+    restore_registry_state(saved_state)
   end
 
   # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
@@ -663,14 +660,9 @@ RSpec.describe ModelSettings::ModuleRegistry do
     # rubocop:disable RSpecGuide/ContextSetup
     context "when no configs registered" do  # No setup - testing empty hash return
       # rubocop:enable RSpecGuide/ContextSetup
-      it "returns empty hash (or only global module configs like :simple_audit)" do
-        # SimpleAudit may be registered globally, so we just check the structure
+      it "returns empty hash" do
         configs = described_class.module_callback_configs
         expect(configs).to be_a(Hash)
-        # If SimpleAudit is registered, it should have proper structure
-        if configs.key?(:simple_audit)
-          expect(configs[:simple_audit]).to include(:default_callback, :configurable)
-        end
       end
     end
 
@@ -689,7 +681,6 @@ RSpec.describe ModelSettings::ModuleRegistry do
       it "returns all configurations" do
         configs = described_class.module_callback_configs
 
-        # May include :simple_audit if it's globally registered
         expect(configs.keys).to include(:pundit, :roles)
       end
     end
@@ -754,8 +745,10 @@ RSpec.describe ModelSettings::ModuleRegistry do
         options = described_class.registered_inheritable_options
 
         # May include options from globally loaded modules, so check our options are present
-        expect(options[:authorize_with]).to eq({merge_strategy: :replace, auto_include: true})
-        expect(options[:viewable_by]).to eq({merge_strategy: :append, auto_include: true})
+        aggregate_failures do
+          expect(options[:authorize_with]).to eq({merge_strategy: :replace, auto_include: true})
+          expect(options[:viewable_by]).to eq({merge_strategy: :append, auto_include: true})
+        end
       end
     end
   end

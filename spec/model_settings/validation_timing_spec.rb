@@ -2,6 +2,7 @@
 
 require "spec_helper"
 
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage, RSpec/DescribeClass, RSpec/ExampleLength, RSpec/MultipleExpectations
 RSpec.describe "Validation Timing Configuration" do
   let(:test_class) do
     Class.new(ActiveRecord::Base) do
@@ -93,7 +94,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "but when single setting has invalid configuration" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "raises error immediately during setting definition" do
         expect {
@@ -111,7 +114,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when JSON adapter misconfigured" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "raises error for missing column during setting definition" do
         expect {
@@ -127,7 +132,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when StoreModel adapter misconfigured" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "raises error for missing column during setting definition" do
         expect {
@@ -166,7 +173,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "but when single setting has invalid configuration" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "collects error and raises with setting name in details" do
         test_class.setting :broken, type: :invalid_type
@@ -181,7 +190,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when multiple settings have invalid configuration" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "collects all errors without stopping on first" do
         test_class.setting :broken1, type: :invalid
@@ -200,7 +211,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when mixing valid and invalid settings" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "reports only invalid settings, omitting valid ones" do
         test_class.setting :valid1, type: :column, default: true
@@ -221,7 +234,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when JSON adapter misconfigured" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "collects error for missing column" do
         test_class.setting :features, type: :json
@@ -249,7 +264,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when StoreModel adapter misconfigured" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "collects error for missing column" do
         test_class.setting :config, type: :store_model
@@ -277,7 +294,9 @@ RSpec.describe "Validation Timing Configuration" do
     end
 
     # rubocop:disable RSpecGuide/ContextSetup
+    # rubocop:disable RSpecGuide/ContextSetup
     context "and when mixing different error types" do
+      # rubocop:enable RSpecGuide/ContextSetup
       # rubocop:enable RSpecGuide/ContextSetup
       it "collects all error types together" do
         test_class.setting :unknown_type, type: :bad
@@ -353,3 +372,4 @@ RSpec.describe "Validation Timing Configuration" do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage, RSpec/DescribeClass, RSpec/ExampleLength, RSpec/MultipleExpectations

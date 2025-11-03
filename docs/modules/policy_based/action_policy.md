@@ -412,3 +412,11 @@ end
 - You prefer automatic parameter filtering
 - You want named filters for different contexts
 - You follow ActionPolicy patterns
+
+## See Also
+
+- [Module Development Guide](../../guides/module_development.md) - Learn how to create custom modules like ActionPolicy
+- [ModuleRegistry API Reference](../../api/module_registry.md) - Complete API documentation
+- [Custom Module Example](../../../examples/custom_module/) - Working example of a custom module
+- [Policy-Based Authorization](README.md) - Overview of policy-based modules
+- [Configuration Guide](../../core/configuration.md) - Global configuration options

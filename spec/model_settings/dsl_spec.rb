@@ -677,6 +677,8 @@ RSpec.describe ModelSettings::DSL do
       test_class.compile_settings!
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
+
     context "when module has metadata for setting" do
       it "returns true for setting with viewable_by" do
         expect(test_class.module_metadata?(:roles, :feature)).to be true
@@ -734,6 +736,8 @@ RSpec.describe ModelSettings::DSL do
       parent_class.compile_settings!
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup, RSpec/MultipleExpectations
+
     context "when copying setting with children" do
       it "copies setting and all descendants" do
         root_setting = parent_class.find_setting(:root)
@@ -764,6 +768,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:enable RSpecGuide/ContextSetup, RSpec/MultipleExpectations
+
+    # rubocop:disable RSpecGuide/ContextSetup, RSpec/MultipleExpectations
     context "when copying leaf setting without children" do
       it "copies setting without children" do
         leaf_setting = parent_class.find_setting([:root, :sibling])
@@ -773,8 +780,11 @@ RSpec.describe ModelSettings::DSL do
         expect(copied.children).to be_empty
       end
     end
+
+    # rubocop:enable RSpecGuide/ContextSetup, RSpec/MultipleExpectations
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".settings_debug" do
     let(:debug_class) do
       Class.new(TestModel) do
@@ -796,6 +806,7 @@ RSpec.describe ModelSettings::DSL do
       debug_class.compile_settings!
     end
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "basic behavior" do
       it "outputs without error" do
         expect { debug_class.settings_debug }.not_to raise_error
@@ -805,22 +816,33 @@ RSpec.describe ModelSettings::DSL do
         expect(debug_class.settings_debug).to be_nil
       end
     end
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "active modules section" do
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when modules are active" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "shows active module names" do
-          expect { debug_class.settings_debug }.to output(/Active Modules/).to_stdout
-          expect { debug_class.settings_debug }.to output(/roles/).to_stdout
+          aggregate_failures do
+            expect { debug_class.settings_debug }.to output(/Active Modules/).to_stdout
+            expect { debug_class.settings_debug }.to output(/roles/).to_stdout
+          end
         end
       end
     end
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
     describe "deprecated settings section" do
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when deprecated settings exist" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "lists deprecated settings with reasons" do
-          expect { debug_class.settings_debug }.to output(/Deprecated Settings: 1/).to_stdout
-          expect { debug_class.settings_debug }.to output(/active/).to_stdout
-          expect { debug_class.settings_debug }.to output(/Use new_active instead/).to_stdout
+          aggregate_failures do
+            expect { debug_class.settings_debug }.to output(/Deprecated Settings: 1/).to_stdout
+            expect { debug_class.settings_debug }.to output(/active/).to_stdout
+            expect { debug_class.settings_debug }.to output(/Use new_active instead/).to_stdout
+          end
         end
       end
 
@@ -847,41 +869,63 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "cascade configuration section" do
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when settings have cascades" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "shows cascade directions" do
-          expect { debug_class.settings_debug }.to output(/Settings with Cascades/).to_stdout
-          expect { debug_class.settings_debug }.to output(/feature.*enable, disable/).to_stdout
+          aggregate_failures do
+            expect { debug_class.settings_debug }.to output(/Settings with Cascades/).to_stdout
+            expect { debug_class.settings_debug }.to output(/feature.*enable, disable/).to_stdout
+          end
         end
       end
     end
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "sync relationships section" do
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when settings have syncs" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "shows sync targets and modes" do
-          expect { debug_class.settings_debug }.to output(/Settings with Syncs/).to_stdout
-          expect { debug_class.settings_debug }.to output(/sync_setting → active \(forward\)/).to_stdout
+          aggregate_failures do
+            expect { debug_class.settings_debug }.to output(/Settings with Syncs/).to_stdout
+            expect { debug_class.settings_debug }.to output(/sync_setting → active \(forward\)/).to_stdout
+          end
         end
       end
 
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when sync execution order exists" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "shows execution order" do
           expect { debug_class.settings_debug }.to output(/Sync Execution Order/).to_stdout
         end
       end
     end
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
+    # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
     describe "settings by type section" do
+      # rubocop:disable RSpecGuide/ContextSetup
       context "when model has multiple adapter types" do
+        # rubocop:enable RSpecGuide/ContextSetup
         it "groups settings by adapter type" do
-          expect { debug_class.settings_debug }.to output(/Settings by Type/).to_stdout
-          expect { debug_class.settings_debug }.to output(/column:/).to_stdout
-          expect { debug_class.settings_debug }.to output(/json:/).to_stdout
+          aggregate_failures do
+            expect { debug_class.settings_debug }.to output(/Settings by Type/).to_stdout
+            expect { debug_class.settings_debug }.to output(/column:/).to_stdout
+            expect { debug_class.settings_debug }.to output(/json:/).to_stdout
+          end
         end
       end
     end
+    # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
   end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe ".create_adapter_for (error handling)" do
     let(:error_class) do
       Class.new(TestModel) do
@@ -893,7 +937,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when storage type is unknown" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "raises ArgumentError with helpful message" do
         setting = ModelSettings::Setting.new(
           :invalid,
@@ -906,6 +952,7 @@ RSpec.describe ModelSettings::DSL do
       end
     end
   end
+  # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
 
   describe ".settings_modules" do
     let(:array_config_class) do
@@ -918,15 +965,18 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
-    before do
-      @saved_state = save_registry_state
+    let(:saved_state) { save_registry_state }
+
+    around do |example|
+      save_registry_state
+      example.run
+    ensure
+      restore_registry_state(saved_state)
     end
 
-    after do
-      restore_registry_state(@saved_state)
-    end
-
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with single module" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "includes module" do
         array_config_class.settings_modules(:roles)
 
@@ -934,7 +984,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with array of modules" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "includes all modules from array" do
         array_config_class.settings_modules([:roles, :i18n])
 
@@ -942,7 +994,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with nested arrays" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "flattens and includes all modules" do
         array_config_class.settings_modules([[:roles], [:i18n]])
 
@@ -950,7 +1004,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with multiple arguments" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "includes all modules" do
         array_config_class.settings_modules(:roles, :i18n, :pundit)
 
@@ -958,7 +1014,9 @@ RSpec.describe ModelSettings::DSL do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with mixed arrays and symbols" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "handles mixed arguments" do
         array_config_class.settings_modules([:roles], :i18n, [:pundit])
 

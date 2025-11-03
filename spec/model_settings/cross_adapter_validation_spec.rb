@@ -4,12 +4,15 @@ require "spec_helper"
 
 # Cross-adapter validation consistency tests
 # Ensure validators work consistently across all storage adapters
+# rubocop:disable RSpecGuide/MinimumBehavioralCoverage, RSpec/DescribeClass, RSpecGuide/ContextSetup, RSpec/ExampleLength, RSpec/MultipleExpectations
 RSpec.describe "Cross-Adapter Validation Consistency" do
   describe "BooleanValueValidator consistency" do
     let(:invalid_value) { "invalid" }
     let(:valid_value) { true }
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "with valid value" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "accepts value across all adapters" do
         # Column adapter
         column_model = Class.new(TestModel) do
@@ -44,7 +47,9 @@ RSpec.describe "Cross-Adapter Validation Consistency" do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "but with invalid value" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "rejects value across all adapters" do
         # Column adapter
         column_model = Class.new(TestModel) do
@@ -281,3 +286,4 @@ RSpec.describe "Cross-Adapter Validation Consistency" do
     end
   end
 end
+# rubocop:enable RSpecGuide/MinimumBehavioralCoverage, RSpec/DescribeClass, RSpecGuide/ContextSetup, RSpec/ExampleLength, RSpec/MultipleExpectations

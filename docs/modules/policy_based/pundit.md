@@ -314,3 +314,11 @@ end
 - You already use Pundit in your application
 - You prefer explicit `permitted_attributes` method
 - You want standard Pundit patterns
+
+## See Also
+
+- [Module Development Guide](../../guides/module_development.md) - Learn how to create custom modules like Pundit
+- [ModuleRegistry API Reference](../../api/module_registry.md) - Complete API documentation
+- [Custom Module Example](../../../examples/custom_module/) - Working example of a custom module
+- [Policy-Based Authorization](README.md) - Overview of policy-based modules
+- [Configuration Guide](../../core/configuration.md) - Global configuration options

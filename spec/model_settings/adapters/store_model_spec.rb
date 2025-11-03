@@ -606,6 +606,7 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     # rubocop:enable RSpecGuide/MinimumBehavioralCoverage
   end
 
+  # rubocop:disable RSpecGuide/MinimumBehavioralCoverage
   describe "BooleanValueValidator integration" do
     # StoreModel adapter uses delegated attributes from StoreModel classes
     # For this test, we'll use a simple AiSettings StoreModel
@@ -629,31 +630,39 @@ RSpec.describe ModelSettings::Adapters::StoreModel do
     # rubocop:enable RSpec/MultipleExpectations
 
     it "rejects string '1'" do
-      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
-      instance.transcription = "1"
-      expect(instance).not_to be_valid
-      expect(instance.errors[:transcription]).to be_present
+      aggregate_failures do
+        instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+        instance.transcription = "1"
+        expect(instance).not_to be_valid
+        expect(instance.errors[:transcription]).to be_present
+      end
     end
 
     it "rejects string 'true'" do
-      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
-      instance.transcription = "true"
-      expect(instance).not_to be_valid
-      expect(instance.errors[:transcription]).to be_present
+      aggregate_failures do
+        instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+        instance.transcription = "true"
+        expect(instance).not_to be_valid
+        expect(instance.errors[:transcription]).to be_present
+      end
     end
 
     it "rejects integer 0" do
-      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
-      instance.transcription = 0
-      expect(instance).not_to be_valid
-      expect(instance.errors[:transcription]).to be_present
+      aggregate_failures do
+        instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+        instance.transcription = 0
+        expect(instance).not_to be_valid
+        expect(instance.errors[:transcription]).to be_present
+      end
     end
 
     it "rejects integer 1" do
-      instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
-      instance.transcription = 1
-      expect(instance).not_to be_valid
-      expect(instance.errors[:transcription]).to be_present
+      aggregate_failures do
+        instance = StoreModelTestModel.new(ai_settings: AiSettings.new)
+        instance.transcription = 1
+        expect(instance).not_to be_valid
+        expect(instance.errors[:transcription]).to be_present
+      end
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage

@@ -824,31 +824,39 @@ RSpec.describe ModelSettings::Adapters::Json do
     # rubocop:enable RSpec/MultipleExpectations
 
     it "rejects string '1'" do
-      instance = validated_model_class.new
-      instance.strict_mode = "1"
-      expect(instance).not_to be_valid
-      expect(instance.errors[:strict_mode]).to be_present
+      aggregate_failures do
+        instance = validated_model_class.new
+        instance.strict_mode = "1"
+        expect(instance).not_to be_valid
+        expect(instance.errors[:strict_mode]).to be_present
+      end
     end
 
     it "rejects string 'true'" do
-      instance = validated_model_class.new
-      instance.strict_mode = "true"
-      expect(instance).not_to be_valid
-      expect(instance.errors[:strict_mode]).to be_present
+      aggregate_failures do
+        instance = validated_model_class.new
+        instance.strict_mode = "true"
+        expect(instance).not_to be_valid
+        expect(instance.errors[:strict_mode]).to be_present
+      end
     end
 
     it "rejects integer 0" do
-      instance = validated_model_class.new
-      instance.strict_mode = 0
-      expect(instance).not_to be_valid
-      expect(instance.errors[:strict_mode]).to be_present
+      aggregate_failures do
+        instance = validated_model_class.new
+        instance.strict_mode = 0
+        expect(instance).not_to be_valid
+        expect(instance.errors[:strict_mode]).to be_present
+      end
     end
 
     it "rejects integer 1" do
-      instance = validated_model_class.new
-      instance.strict_mode = 1
-      expect(instance).not_to be_valid
-      expect(instance.errors[:strict_mode]).to be_present
+      aggregate_failures do
+        instance = validated_model_class.new
+        instance.strict_mode = 1
+        expect(instance).not_to be_valid
+        expect(instance.errors[:strict_mode]).to be_present
+      end
     end
   end
   # rubocop:enable RSpecGuide/MinimumBehavioralCoverage, RSpecGuide/InvariantExamples

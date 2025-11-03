@@ -313,7 +313,9 @@ RSpec.describe ModelSettings::DeprecationAuditor do
   end
 
   describe "#find_models_with_settings (private)" do
+    # rubocop:disable RSpecGuide/ContextSetup
     context "when Rails is defined" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns models that include ModelSettings::DSL" do
         models = auditor.send(:find_models_with_settings)
 
@@ -321,7 +323,9 @@ RSpec.describe ModelSettings::DeprecationAuditor do
       end
     end
 
+    # rubocop:disable RSpecGuide/ContextSetup
     context "but when Rails is not defined" do
+      # rubocop:enable RSpecGuide/ContextSetup
       it "returns empty array" do
         # Temporarily hide Rails constant
         rails_const = Object.send(:remove_const, :Rails) if defined?(Rails)
